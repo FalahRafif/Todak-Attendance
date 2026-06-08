@@ -4,7 +4,7 @@ use App\Http\Controllers\Api\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')
-    ->middleware(['web', 'auth', 'role:admin'])
+    ->middleware(['web', 'auth', 'role:Admin'])
     ->name('api.admin.')
     ->group(function (): void {
         Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
