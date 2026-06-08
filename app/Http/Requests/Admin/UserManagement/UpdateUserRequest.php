@@ -42,7 +42,7 @@ class UpdateUserRequest extends FormRequest
                 Rule::exists('roles', 'id')->where(function (Builder $query): void {
                     $query
                         ->where('delete_status', false)
-                        ->whereIn('name', [RoleName::Admin->value, RoleName::Petugas->value]);
+                        ->whereIn('name', [RoleName::Admin->value, RoleName::Hrd->value, RoleName::Karyawan->value, RoleName::KaryawanKontrak->value, RoleName::Interns->value]);
                 }),
             ],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],

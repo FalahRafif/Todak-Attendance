@@ -34,7 +34,7 @@ class AuthService
             return false;
         }
 
-        $internalRoles = config('role_access.roles.internal', [RoleName::Admin->value, RoleName::Petugas->value]);
+        $internalRoles = config('role_access.roles.internal', [RoleName::Admin->value, RoleName::Hrd->value]);
 
         return $user->hasRole($internalRoles);
     }
