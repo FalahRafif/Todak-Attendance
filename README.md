@@ -326,3 +326,243 @@ Start server:
 - Untuk feature baru, ikuti alur: Controller -> Service -> Repository -> Model.
 - Setelah edit config/routes/provider/views, jalankan `artisan optimize:clear`.
 - Jalankan minimal `php -l` untuk file PHP yang diedit.
+
+---
+
+# Business Requirement & Feature Roadmap
+
+Dokumen BRD lengkap tersedia pada `business_requirement_document.md`. Bagian README ini adalah ringkasan teknis agar agent/developer cepat memahami modul, role, flow, dan prioritas implementasi.
+
+## Product Goal
+
+KlikAbsen adalah aplikasi absensi karyawan untuk:
+
+- Master data HR: employee, department, position, work location, shift, holiday.
+- Absensi masuk/keluar dengan foto dari kamera dan GPS.
+- Validasi radius 100 meter, tetapi outside radius tetap diperbolehkan untuk WFH, dinas luar, meeting luar, atau client visit dengan work mode dan catatan.
+- Pengajuan sakit/cuti/izin.
+- Pengajuan koreksi absensi.
+- Approval HRD.
+- Monitoring dan report absensi.
+
+## Route Prefix Target
+
+- Admin: `/admin/*`
+- HRD: `/hrd/*`
+- Employee: `/employee/*`
+- Auth API: `/api/login`, `/api/logout`
+
+## Admin Modules
+
+Menu target Admin:
+
+- `/admin/dashboard`
+- `/admin/departments`
+- `/admin/positions`
+- `/admin/work-locations`
+- `/admin/shifts`
+- `/admin/holidays`
+- `/admin/employees`
+- `/admin/employee-work-locations`
+- `/admin/settings`
+- `/admin/references`
+- `/admin/roles`
+- `/admin/users`
+- `/admin/activity-logs`
+
+Prioritas MVP Admin:
+
+1. Dashboard Admin.
+2. CRUD Departments.
+3. CRUD Positions.
+4. CRUD Work Locations.
+5. CRUD Shifts.
+6. CRUD Holidays.
+7. CRUD Employees.
+
+## HRD Modules
+
+Menu target HRD:
+
+- `/hrd/dashboard`
+- `/hrd/attendances`
+- `/hrd/attendances/not-checked-in`
+- `/hrd/attendances/incomplete`
+- `/hrd/attendances/late`
+- `/hrd/attendances/outside-radius`
+- `/hrd/attendances/{id}`
+- `/hrd/leave-requests`
+- `/hrd/attendance-corrections`
+- `/hrd/employee-schedules`
+- `/hrd/leave-balances`
+- `/hrd/reports/daily-attendance`
+- `/hrd/reports/monthly-attendance`
+- `/hrd/reports/employees/{id}`
+
+Prioritas MVP HRD:
+
+1. Dashboard HRD.
+2. Monitoring absensi harian.
+3. Detail attendance.
+4. Approval leave request.
+5. Approval correction request.
+6. Review outside radius attendance.
+7. Report harian.
+8. Report bulanan.
+9. Export Excel.
+
+## Employee Modules
+
+Menu target Employee:
+
+- `/employee/dashboard`
+- `/employee/attendance`
+- `/employee/attendance/check-in`
+- `/employee/attendance/check-out`
+- `/employee/attendance/history`
+- `/employee/attendance/history/{id}`
+- `/employee/leave-requests`
+- `/employee/leave-requests/create`
+- `/employee/leave-requests/{id}`
+- `/employee/attendance-corrections`
+- `/employee/attendance-corrections/create`
+- `/employee/attendance-corrections/{id}`
+- `/employee/profile`
+
+Prioritas MVP Employee:
+
+1. Dashboard Employee.
+2. Status absensi hari ini.
+3. Check-in dengan kamera dan GPS.
+4. Check-out dengan kamera dan GPS.
+5. History absensi bulan berjalan.
+6. Pengajuan sakit/cuti/izin.
+7. Pengajuan koreksi absensi.
+8. Profil saya.
+
+## Core Flow Summary
+
+### Check-in
+
+1. Employee login.
+2. Buka `/employee/attendance`.
+3. Sistem cek employee aktif, shift, work location, dan attendance hari ini.
+4. Employee ambil foto dari kamera.
+5. Browser mengambil GPS.
+6. Sistem hitung jarak ke work location.
+7. Jika dalam radius, simpan normal.
+8. Jika outside radius, employee wajib pilih work mode dan isi catatan.
+9. Simpan `attendances` dan `attendance_logs`.
+
+### Check-out
+
+1. Employee harus sudah check-in.
+2. Employee ambil foto dari kamera dan GPS.
+3. Sistem hitung jarak.
+4. Jika outside radius, wajib work mode dan catatan.
+5. Update attendance check-out.
+6. Hitung total work minutes dan early leave minutes.
+7. Simpan attendance log.
+
+### Leave Request
+
+1. Employee submit annual leave, sick leave, atau permission.
+2. Status awal `pending`.
+3. HRD approve/reject.
+4. Jika approved, sistem update/membuat attendance sesuai tanggal.
+5. Jika rejected, wajib rejected reason.
+
+### Attendance Correction
+
+1. Employee submit koreksi untuk tanggal tertentu.
+2. Status awal `pending`.
+3. HRD approve/reject.
+4. Jika approved, sistem membuat/update attendance dan attendance log.
+5. Jika rejected, wajib rejected reason.
+
+### Outside Radius Review
+
+1. Outside radius disimpan dengan `is_need_approval = true`.
+2. HRD review foto, GPS, jarak, work mode, catatan, dan device info.
+3. HRD approve atau flag/reject.
+4. Untuk MVP, reject/flag tidak menghapus attendance.
+
+## Implementation Phases
+
+### Phase 1 - Routing, Layout, Placeholder
+
+- Tambah route prefix `/employee`.
+- Pastikan redirect login sesuai role.
+- Buat dashboard Admin, HRD, Employee.
+- Update sidebar/menu sesuai role.
+- Semua menu harus aman dengan `Route::has()`.
+
+### Phase 2 - Master Data Admin
+
+- CRUD Departments.
+- CRUD Positions.
+- CRUD Work Locations.
+- CRUD Shifts.
+- CRUD Holidays.
+- CRUD Employees.
+
+### Phase 3 - Attendance Employee
+
+- Halaman attendance mobile-first.
+- Kamera browser.
+- Geolocation browser.
+- Check-in.
+- Check-out.
+- Hitung radius.
+- Wajib catatan outside radius.
+- Simpan attachment dan attendance log.
+
+### Phase 4 - Leave dan Correction
+
+- Employee leave request.
+- HRD leave approval.
+- Employee correction request.
+- HRD correction approval.
+- Update attendance hasil approval.
+
+### Phase 5 - HRD Monitoring dan Report
+
+- Dashboard HRD real data.
+- Monitoring harian.
+- Detail attendance.
+- Outside radius review.
+- Report harian.
+- Report bulanan.
+- Generate monthly summary.
+- Export Excel.
+
+### Phase 6 - Audit dan Testing
+
+- Activity log.
+- Authorization policy.
+- Form request validation.
+- Feature test login.
+- Feature test CRUD master.
+- Feature test check-in/check-out.
+- Feature test leave approval.
+- Feature test correction approval.
+
+## Global Acceptance Criteria
+
+- Admin bisa CRUD master data utama.
+- HRD bisa monitoring absensi.
+- Employee bisa check-in dan check-out.
+- Foto absensi wajib dari kamera.
+- GPS wajib saat absensi.
+- Radius default 100 meter.
+- Outside radius tetap bisa dilakukan dengan work mode dan catatan.
+- Outside radius ditandai perlu approval.
+- Employee bisa melihat history absensi bulan berjalan.
+- Employee bisa mengajukan sakit/cuti/izin.
+- HRD bisa approve/reject sakit/cuti/izin.
+- Employee bisa mengajukan koreksi absensi.
+- HRD bisa approve/reject koreksi.
+- HRD bisa membuat report harian dan bulanan.
+- Export Excel tersedia minimal untuk report.
+- Activity log mencatat aksi penting.
+
