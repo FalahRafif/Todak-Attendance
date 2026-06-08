@@ -40,16 +40,5 @@ return [
                 ],
             ],
         ],
-        [
-            'section' => 'Management Data',
-            'items' => [
-                [
-                    'label' => 'Management User/Akun',
-                    'route_name' => 'users',
-                    'active' => ['users', 'users.create', 'users.edit'],
-                    'roles' => [RoleName::Admin->value],
-                ],
-            ],
-        ],
     ],
 ];

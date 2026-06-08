@@ -6,29 +6,28 @@
 <style>
     .login-page {
         min-height: 100vh;
-        display: grid;
-        grid-template-columns: minmax(0, 1.05fr) minmax(420px, .95fr);
-        background:
-            radial-gradient(circle at 20% 20%, rgba(29, 155, 240, .22), transparent 28%),
-            linear-gradient(135deg, #071827 0%, #0b2742 48%, #f8fbff 48.1%, #ffffff 100%);
+        display: flex;
+        flex-direction: column;
+        background: #f8fbff;
     }
 
     .brand-panel {
         position: relative;
-        display: flex;
-        align-items: center;
-        padding: 72px;
+        padding: 28px 20px 88px;
         color: #ffffff;
+        background:
+            radial-gradient(circle at 80% 0%, rgba(125, 211, 252, .30), transparent 32%),
+            linear-gradient(145deg, #071827 0%, #0b2742 58%, #0f4c81 100%);
         overflow: hidden;
     }
 
     .brand-panel::after {
         content: "";
         position: absolute;
-        width: 380px;
-        height: 380px;
-        right: -120px;
-        bottom: -120px;
+        width: 220px;
+        height: 220px;
+        right: -90px;
+        bottom: -90px;
         border: 1px solid rgba(255,255,255,.14);
         border-radius: 999px;
     }
@@ -37,18 +36,19 @@
         position: relative;
         z-index: 1;
         max-width: 560px;
+        margin: 0 auto;
     }
 
     .brand-badge {
         display: inline-flex;
         align-items: center;
         gap: 10px;
-        padding: 10px 14px;
+        padding: 9px 12px;
         border: 1px solid rgba(255,255,255,.18);
         border-radius: 999px;
         background: rgba(255,255,255,.08);
-        font-size: 13px;
-        font-weight: 700;
+        font-size: 11px;
+        font-weight: 800;
         letter-spacing: .08em;
         text-transform: uppercase;
     }
@@ -56,9 +56,9 @@
     .brand-mark {
         display: inline-grid;
         place-items: center;
-        width: 36px;
-        height: 36px;
-        border-radius: 12px;
+        width: 32px;
+        height: 32px;
+        border-radius: 11px;
         background: #ffffff;
         color: var(--primary);
         font-weight: 900;
@@ -66,10 +66,10 @@
     }
 
     .brand-title {
-        margin: 30px 0 18px;
-        font-size: clamp(44px, 6vw, 72px);
-        line-height: .95;
-        letter-spacing: -.05em;
+        margin: 24px 0 12px;
+        font-size: clamp(34px, 12vw, 54px);
+        line-height: .98;
+        letter-spacing: -.055em;
         font-weight: 900;
     }
 
@@ -78,87 +78,91 @@
     }
 
     .brand-copy {
-        max-width: 460px;
-        color: rgba(255,255,255,.72);
-        font-size: 17px;
-        line-height: 1.8;
+        color: rgba(255,255,255,.74);
+        font-size: 14px;
+        line-height: 1.75;
         margin: 0;
     }
 
     .feature-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 42px;
+        gap: 8px;
+        margin-top: 22px;
     }
 
     .feature-card {
-        padding: 18px;
-        border-radius: 20px;
+        padding: 12px;
+        border-radius: 16px;
         border: 1px solid rgba(255,255,255,.14);
         background: rgba(255,255,255,.08);
         backdrop-filter: blur(10px);
+        min-width: 0;
     }
 
     .feature-value {
-        font-size: 24px;
+        font-size: 16px;
         font-weight: 900;
-        margin-bottom: 4px;
+        margin-bottom: 3px;
     }
 
     .feature-label {
-        color: rgba(255,255,255,.62);
-        font-size: 12px;
-        line-height: 1.5;
+        color: rgba(255,255,255,.64);
+        font-size: 10px;
+        line-height: 1.4;
     }
 
     .form-panel {
+        flex: 1;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
-        padding: 48px;
+        padding: 0 16px 24px;
+        margin-top: -58px;
+        position: relative;
+        z-index: 2;
     }
 
     .login-card {
         width: 100%;
-        max-width: 440px;
-        padding: 42px;
+        max-width: 430px;
+        padding: 26px 20px;
         border: 1px solid var(--line);
-        border-radius: 28px;
-        background: rgba(255,255,255,.94);
-        box-shadow: 0 24px 70px rgba(15, 23, 42, .12);
+        border-radius: 24px;
+        background: rgba(255,255,255,.98);
+        box-shadow: 0 24px 70px rgba(15, 23, 42, .16);
     }
 
     .login-kicker {
         color: var(--accent);
-        font-size: 12px;
-        font-weight: 800;
+        font-size: 11px;
+        font-weight: 900;
         letter-spacing: .14em;
         text-transform: uppercase;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
     }
 
     .login-title {
         margin: 0;
         color: var(--ink);
-        font-size: 34px;
+        font-size: 28px;
         line-height: 1.12;
-        letter-spacing: -.035em;
+        letter-spacing: -.04em;
         font-weight: 900;
     }
 
     .login-subtitle {
-        margin: 12px 0 30px;
+        margin: 10px 0 24px;
         color: var(--muted);
-        line-height: 1.7;
-        font-size: 14px;
+        line-height: 1.65;
+        font-size: 13px;
     }
 
     .alert {
-        padding: 13px 14px;
+        padding: 12px 13px;
         border-radius: 14px;
-        margin-bottom: 18px;
-        font-size: 14px;
+        margin-bottom: 16px;
+        font-size: 13px;
         line-height: 1.5;
         border: 1px solid #fecaca;
         color: #991b1b;
@@ -167,12 +171,12 @@
 
     .field-stack {
         display: grid;
-        gap: 16px;
+        gap: 14px;
     }
 
     .field label {
         display: block;
-        margin-bottom: 8px;
+        margin-bottom: 7px;
         color: #1e293b;
         font-size: 13px;
         font-weight: 800;
@@ -180,9 +184,9 @@
 
     .input {
         width: 100%;
-        height: 50px;
+        height: 52px;
         border: 1px solid var(--line);
-        border-radius: 15px;
+        border-radius: 16px;
         padding: 0 15px;
         color: var(--ink);
         background: #ffffff;
@@ -199,7 +203,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin: 18px 0 24px;
+        margin: 16px 0 22px;
         color: var(--muted);
         font-size: 13px;
     }
@@ -225,38 +229,89 @@
         font-weight: 900;
         background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
         box-shadow: 0 18px 34px rgba(15, 76, 129, .28);
-        transition: transform .18s ease, box-shadow .18s ease;
-    }
-
-    .submit-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 22px 40px rgba(15, 76, 129, .34);
     }
 
     .login-note {
-        margin-top: 22px;
+        margin-top: 18px;
         color: var(--muted);
         font-size: 12px;
         text-align: center;
         line-height: 1.6;
     }
 
-    @media (max-width: 960px) {
+    @media (min-width: 768px) {
+        .brand-panel {
+            padding: 44px 40px 116px;
+        }
+
+        .login-card {
+            padding: 34px 32px;
+        }
+
+        .login-title {
+            font-size: 34px;
+        }
+    }
+
+    @media (min-width: 1024px) {
         .login-page {
-            grid-template-columns: 1fr;
-            background: linear-gradient(180deg, #071827 0%, #0b2742 38%, #f8fbff 38.1%, #ffffff 100%);
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(420px, .95fr);
+            background:
+                radial-gradient(circle at 20% 20%, rgba(29, 155, 240, .22), transparent 28%),
+                linear-gradient(135deg, #071827 0%, #0b2742 48%, #f8fbff 48.1%, #ffffff 100%);
         }
 
         .brand-panel {
-            padding: 44px 28px 24px;
+            display: flex;
+            align-items: center;
+            padding: 72px;
+            background: transparent;
+        }
+
+        .brand-content {
+            margin: 0;
+        }
+
+        .brand-title {
+            font-size: clamp(54px, 5vw, 72px);
+        }
+
+        .brand-copy {
+            font-size: 17px;
         }
 
         .feature-grid {
-            grid-template-columns: 1fr;
+            gap: 14px;
+            margin-top: 42px;
+        }
+
+        .feature-card {
+            padding: 18px;
+            border-radius: 20px;
+        }
+
+        .feature-value {
+            font-size: 24px;
+        }
+
+        .feature-label {
+            font-size: 12px;
         }
 
         .form-panel {
-            padding: 28px;
+            align-items: center;
+            padding: 48px;
+            margin-top: 0;
+        }
+
+        .submit-btn {
+            transition: transform .18s ease, box-shadow .18s ease;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 22px 40px rgba(15, 76, 129, .34);
         }
     }
 </style>

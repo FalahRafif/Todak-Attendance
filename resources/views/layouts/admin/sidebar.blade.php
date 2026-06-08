@@ -10,11 +10,13 @@
 
 <aside class="app-sidebar sticky" id="sidebar">
     <div class="main-sidebar-header">
-        <a href="{{ route($dashboardRoute) }}" class="header-logo" style="text-decoration:none;">
-            <span style="display:inline-flex;align-items:center;gap:10px;font-weight:900;color:#0f4c81;font-size:18px;letter-spacing:-.03em;">
-                <span style="display:inline-grid;place-items:center;width:34px;height:34px;border-radius:12px;background:#0f4c81;color:#fff;font-size:13px;">KA</span>
-                KlikAbsen
-            </span>
+        <a href="{{ route($dashboardRoute) }}" class="header-logo">
+            <img src="{{ asset('assets/etherno/public/icon_trans_2.png') }}" alt="logo" class="desktop-logo">
+            <img src="{{ asset('assets/etherno/public/icon_trans_2.png') }}" alt="logo" class="toggle-logo">
+            <img src="{{ asset('assets/etherno/public/icon_trans_white_1.png') }}" alt="logo" class="desktop-dark">
+            <img src="{{ asset('assets/etherno/public/icon_trans_white_1.png') }}" alt="logo" class="toggle-dark">
+            <img src="{{ asset('assets/etherno/public/icon_trans_2.png') }}" alt="logo" class="desktop-white">
+            <img src="{{ asset('assets/etherno/public/icon_trans_2.png') }}" alt="logo" class="toggle-white">
         </a>
     </div>
 
@@ -25,7 +27,12 @@
                     @php
                         $visibleItems = collect($section['items'] ?? [])->filter(function (array $item) use ($roleName): bool {
                             $allowedRoles = $item['roles'] ?? [];
-                            return $roleName !== null && !empty($allowedRoles) && in_array($roleName, $allowedRoles, true);
+
+                            if ($roleName === null || empty($allowedRoles)) {
+                                return false;
+                            }
+
+                            return in_array($roleName, $allowedRoles, true);
                         });
                     @endphp
 
@@ -42,9 +49,18 @@
 
                         @php
                             $routeName = $routePrefix . '.' . $item['route_name'];
+                            if (!\Illuminate\Support\Facades\Route::has($routeName)) {
+                                continue;
+                            }
+
                             $activePatterns = $item['active'] ?? [$item['route_name']];
-                            $activePatterns = is_array($activePatterns) ? $activePatterns : [$activePatterns];
-                            $activePatterns = array_map(static fn (string $pattern): string => $routePrefix . '.' . $pattern, $activePatterns);
+                            if (!is_array($activePatterns)) {
+                                $activePatterns = [$activePatterns];
+                            }
+                            $activePatterns = array_map(
+                                static fn (string $pattern): string => $routePrefix . '.' . $pattern,
+                                $activePatterns
+                            );
                         @endphp
 
                         <li class="slide">
