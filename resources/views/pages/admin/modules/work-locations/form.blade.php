@@ -1,0 +1,8 @@
+@extends('layouts.admin.admin')
+@section('title', $title)
+@section('content')
+@include('pages.admin.modules.partials.flash')
+@php($isEdit = $item !== null)
+<h2 class="mb-3">{{ $title }}</h2><div class="card custom-card"><div class="card-body"><form method="POST" action="{{ $isEdit ? route('admin.work-locations.update', $item->id) : route('admin.work-locations.store') }}" class="row g-3">@csrf @if($isEdit) @method('PUT') @endif
+<div class="col-md-6"><label class="form-label">Name</label><input name="name" value="{{ old('name', $item?->name) }}" class="form-control" required></div><div class="col-md-6"><label class="form-label">Radius Meter</label><input type="number" name="radius_meter" value="{{ old('radius_meter', $item?->radius_meter ?? 100) }}" class="form-control" required></div><div class="col-12"><label class="form-label">Address</label><textarea name="address" class="form-control">{{ old('address', $item?->address) }}</textarea></div><div class="col-md-6"><label class="form-label">Latitude</label><input name="latitude" value="{{ old('latitude', $item?->latitude) }}" class="form-control"></div><div class="col-md-6"><label class="form-label">Longitude</label><input name="longitude" value="{{ old('longitude', $item?->longitude) }}" class="form-control"></div><div class="col-md-3"><label><input type="checkbox" name="is_default" value="1" @checked(old('is_default', $item?->is_default))> Default</label></div><div class="col-md-3"><label><input type="checkbox" name="is_active" value="1" @checked(old('is_active', $item?->is_active ?? true))> Active</label></div><div class="col-12"><button class="btn btn-primary">Save</button><a href="{{ route('admin.work-locations') }}" class="btn btn-light">Back</a></div></form></div></div>
+@endsection

@@ -54,6 +54,36 @@
             background-color: #f8fbff;
         }
 
+        [data-theme-mode="dark"] body,
+        [data-theme-mode="dark"] .page,
+        [data-theme-mode="dark"] .main-content,
+        [data-theme-mode="dark"] .app-content,
+        [data-theme-mode="dark"] .main-container {
+            background-color: var(--default-body-bg-color, #111827) !important;
+            color: var(--default-text-color, #e5e7eb);
+        }
+
+        [data-theme-mode="dark"] .card,
+        [data-theme-mode="dark"] .custom-card,
+        [data-theme-mode="dark"] .table,
+        [data-theme-mode="dark"] .form-control,
+        [data-theme-mode="dark"] .form-select {
+            background-color: var(--custom-white, #1f2937) !important;
+            color: var(--default-text-color, #e5e7eb) !important;
+            border-color: var(--default-border, #374151) !important;
+        }
+
+        [data-theme-mode="dark"] .table > :not(caption) > * > * {
+            background-color: transparent !important;
+            color: var(--default-text-color, #e5e7eb) !important;
+            border-color: var(--default-border, #374151) !important;
+        }
+
+        [data-theme-mode="dark"] .text-muted,
+        [data-theme-mode="dark"] .form-label {
+            color: var(--text-muted, #9ca3af) !important;
+        }
+
         .side-menu__item.active,
         .side-menu__item:hover {
             color: #0f4c81 !important;
