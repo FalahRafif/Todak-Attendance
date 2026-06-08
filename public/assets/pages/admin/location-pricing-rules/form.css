@@ -1,0 +1,8 @@
+.lpr-form-card .card-body {
+    padding-top: 1.25rem;
+}
+
+.lpr-form-card .form-select,
+.lpr-form-card .form-control {
+    min-height: 40px;
+}

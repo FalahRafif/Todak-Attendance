@@ -1,0 +1,26 @@
+.profile-form-wrap .card-body {
+    padding-top: 1.25rem;
+}
+
+.profile-image-wrap {
+    border: 1px dashed rgba(0, 0, 0, 0.14);
+    border-radius: 0.65rem;
+    padding: 1rem;
+    background-color: #fff;
+}
+
+.profile-image-preview {
+    width: 140px;
+    height: 140px;
+    border-radius: 999px;
+    object-fit: cover;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    display: block;
+    margin: 0 auto;
+}
+
+@media (max-width: 992px) {
+    .profile-image-wrap {
+        margin-bottom: 1rem;
+    }
+}

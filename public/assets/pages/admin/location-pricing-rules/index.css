@@ -1,0 +1,14 @@
+.lpr-search-form {
+    min-width: 280px;
+}
+
+.lpr-search-form .input-group-text {
+    background-color: #fff;
+}
+
+@media (max-width: 768px) {
+    .lpr-search-form {
+        width: 100%;
+        min-width: 100%;
+    }
+}

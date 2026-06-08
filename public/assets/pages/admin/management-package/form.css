@@ -1,0 +1,17 @@
+.mp-thumbnail-preview {
+    width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    border-radius: 0.375rem;
+}
+
+.mp-thumbnail-placeholder {
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mp-benefit-row .input-group-text {
+    background-color: var(--bs-primary-bg-subtle, #e7f1ff);
+}
