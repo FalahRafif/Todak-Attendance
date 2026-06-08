@@ -49,6 +49,10 @@
 
                         @php
                             $routeName = $routePrefix . '.' . $item['route_name'];
+                            if (!\Illuminate\Support\Facades\Route::has($routeName)) {
+                                continue;
+                            }
+
                             $activePatterns = $item['active'] ?? [$item['route_name']];
                             if (!is_array($activePatterns)) {
                                 $activePatterns = [$activePatterns];

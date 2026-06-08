@@ -43,5 +43,32 @@
     <!-- Choices Css -->
     <link rel="stylesheet" href="{{ asset('assets/libs/choices.js/public/assets/styles/choices.min.css') }}">
 
+    <style>
+        :root {
+            --primary-rgb: 15, 76, 129;
+            --primary-color: #0f4c81;
+            --default-border: #dbe4f0;
+        }
+
+        body {
+            background-color: #f8fbff;
+        }
+
+        .side-menu__item.active,
+        .side-menu__item:hover {
+            color: #0f4c81 !important;
+            background-color: rgba(15, 76, 129, .08) !important;
+        }
+
+        .btn-primary,
+        .bg-primary {
+            background-color: #0f4c81 !important;
+            border-color: #0f4c81 !important;
+        }
+
+        .text-primary {
+            color: #0f4c81 !important;
+        }
+    </style>
 
 </head>
