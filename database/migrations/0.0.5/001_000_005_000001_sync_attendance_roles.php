@@ -2,7 +2,9 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 return new class extends Migration
@@ -51,10 +53,54 @@ return new class extends Migration
             'deleted_by' => null,
             'delete_status' => false,
         ]);
+
+        DB::table('users')->whereNull('uuid')->orderBy('id')->chunkById(100, function ($users): void {
+            foreach ($users as $user) {
+                DB::table('users')->where('id', $user->id)->update(['uuid' => (string) Str::uuid()]);
+            }
+        });
+
+        $this->dropIndexIfExists('users', 'users_username_index');
+        $this->addUniqueIndexIfMissing('users', 'users_username_unique', ['username']);
+
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE `users` MODIFY `uuid` CHAR(36) NOT NULL');
+        }
     }
 
     public function down(): void
     {
         DB::table('users')->where('email', 'employee@klikabsen.local')->delete();
+    }
+
+    private function addUniqueIndexIfMissing(string $table, string $indexName, array $columns): void
+    {
+        if ($this->indexExists($table, $indexName)) {
+            return;
+        }
+
+        Schema::table($table, function (Blueprint $blueprint) use ($indexName, $columns): void {
+            $blueprint->unique($columns, $indexName);
+        });
+    }
+
+    private function dropIndexIfExists(string $table, string $indexName): void
+    {
+        if (!$this->indexExists($table, $indexName)) {
+            return;
+        }
+
+        Schema::table($table, function (Blueprint $blueprint) use ($indexName): void {
+            $blueprint->dropIndex($indexName);
+        });
+    }
+
+    private function indexExists(string $table, string $indexName): bool
+    {
+        return DB::table('information_schema.statistics')
+            ->whereRaw('table_schema = database()')
+            ->where('table_name', $table)
+            ->where('index_name', $indexName)
+            ->exists();
     }
 };

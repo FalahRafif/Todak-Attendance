@@ -47,12 +47,15 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('employee_id')->constrained('employees')->cascadeOnDelete();
+            $table->foreignId('leave_type_id')->nullable()->constrained('references')->nullOnDelete();
             $table->unsignedSmallInteger('year');
             $table->unsignedInteger('total_quota')->default(0);
             $table->unsignedInteger('used_quota')->default(0);
             $table->unsignedInteger('remaining_quota')->default(0);
             $this->auditColumns($table);
-            $table->unique(['employee_id', 'year'], 'leave_balances_employee_year_unique');
+            $table->index('employee_id', 'leave_balances_employee_id_index');
+            $table->index('leave_type_id', 'leave_balances_leave_type_id_index');
+            $table->unique(['employee_id', 'leave_type_id', 'year'], 'leave_balances_employee_leave_type_year_unique');
         });
     }
 

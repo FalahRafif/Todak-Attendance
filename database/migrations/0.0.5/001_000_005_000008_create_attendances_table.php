@@ -20,6 +20,7 @@ return new class extends Migration
             $table->decimal('check_in_latitude', 10, 7)->nullable();
             $table->decimal('check_in_longitude', 10, 7)->nullable();
             $table->decimal('check_in_distance_meter', 10, 2)->nullable();
+            $table->decimal('check_in_gps_accuracy_meter', 10, 2)->nullable();
             $table->boolean('check_in_is_inside_radius')->nullable();
             $table->foreignId('check_in_work_mode_id')->nullable()->constrained('references')->nullOnDelete();
             $table->text('check_in_note')->nullable();
@@ -29,6 +30,7 @@ return new class extends Migration
             $table->decimal('check_out_latitude', 10, 7)->nullable();
             $table->decimal('check_out_longitude', 10, 7)->nullable();
             $table->decimal('check_out_distance_meter', 10, 2)->nullable();
+            $table->decimal('check_out_gps_accuracy_meter', 10, 2)->nullable();
             $table->boolean('check_out_is_inside_radius')->nullable();
             $table->foreignId('check_out_work_mode_id')->nullable()->constrained('references')->nullOnDelete();
             $table->text('check_out_note')->nullable();

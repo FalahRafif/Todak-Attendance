@@ -18,6 +18,7 @@ return new class extends Migration
             $table->decimal('latitude', 10, 7)->nullable();
             $table->decimal('longitude', 10, 7)->nullable();
             $table->decimal('distance_meter', 10, 2)->nullable();
+            $table->decimal('gps_accuracy_meter', 10, 2)->nullable();
             $table->boolean('is_inside_radius')->nullable();
             $table->foreignId('work_mode_id')->nullable()->constrained('references')->nullOnDelete();
             $table->text('note')->nullable();
@@ -25,6 +26,7 @@ return new class extends Migration
             $table->text('device_info')->nullable();
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
+            $table->string('source', 50)->nullable();
             $this->auditColumns($table);
             $table->index(['attendance_id', 'delete_status']);
             $table->index(['employee_id', 'delete_status']);
