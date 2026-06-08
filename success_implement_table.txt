@@ -1,0 +1,915 @@
+Database: klikabsen
+Generated at: 2026-06-08 09:14:41
+Total tables: 32
+
+=================================================================================
+TABLE: activity_logs
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- user_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- module | varchar(100) | nullable=NO | default=NULL | key=MUL | extra=-
+- action | varchar(100) | nullable=NO | default=NULL | key=MUL | extra=-
+- description | text | nullable=YES | default=NULL | key=- | extra=-
+- old_value | json | nullable=YES | default=NULL | key=- | extra=-
+- new_value | json | nullable=YES | default=NULL | key=- | extra=-
+- ip_address | varchar(45) | nullable=YES | default=NULL | key=- | extra=-
+- user_agent | text | nullable=YES | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=MUL | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: approvals
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- approvable_type | varchar(255) | nullable=NO | default=NULL | key=MUL | extra=-
+- approvable_id | bigint unsigned | nullable=NO | default=NULL | key=- | extra=-
+- requested_by | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- approved_by | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- status_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- approval_level | int unsigned | nullable=NO | default=1 | key=- | extra=-
+- note | text | nullable=YES | default=NULL | key=- | extra=-
+- approved_at | datetime | nullable=YES | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: attachments
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- name | varchar(255) | nullable=NO | default=NULL | key=MUL | extra=-
+- path | text | nullable=NO | default=NULL | key=- | extra=-
+- type_file | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: attendance_correction_requests
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- employee_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- attendance_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- correction_date | date | nullable=NO | default=NULL | key=MUL | extra=-
+- requested_check_in_at | datetime | nullable=YES | default=NULL | key=- | extra=-
+- requested_check_out_at | datetime | nullable=YES | default=NULL | key=- | extra=-
+- reason | text | nullable=NO | default=NULL | key=- | extra=-
+- attachment_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- status_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- approved_by | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- approved_at | datetime | nullable=YES | default=NULL | key=- | extra=-
+- approval_note | text | nullable=YES | default=NULL | key=- | extra=-
+- rejected_reason | text | nullable=YES | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: attendance_logs
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- attendance_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- employee_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- action_type_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- action_at | datetime | nullable=NO | default=NULL | key=MUL | extra=-
+- latitude | decimal(10,7) | nullable=YES | default=NULL | key=- | extra=-
+- longitude | decimal(10,7) | nullable=YES | default=NULL | key=- | extra=-
+- distance_meter | decimal(10,2) | nullable=YES | default=NULL | key=- | extra=-
+- is_inside_radius | tinyint(1) | nullable=YES | default=NULL | key=- | extra=-
+- work_mode_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- note | text | nullable=YES | default=NULL | key=- | extra=-
+- photo_attachment_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- device_info | text | nullable=YES | default=NULL | key=- | extra=-
+- ip_address | varchar(45) | nullable=YES | default=NULL | key=- | extra=-
+- user_agent | text | nullable=YES | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: attendance_monthly_summaries
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- employee_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- year | smallint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- month | tinyint unsigned | nullable=NO | default=NULL | key=- | extra=-
+- total_work_days | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_present | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_late | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_absent | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_sick | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_leave | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_permission | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_incomplete | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_outside_radius | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_work_minutes | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_late_minutes | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- total_early_leave_minutes | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- generated_at | datetime | nullable=YES | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: attendances
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- employee_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- shift_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- work_location_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- attendance_date | date | nullable=NO | default=NULL | key=MUL | extra=-
+- check_in_at | datetime | nullable=YES | default=NULL | key=- | extra=-
+- check_in_photo_attachment_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- check_in_latitude | decimal(10,7) | nullable=YES | default=NULL | key=- | extra=-
+- check_in_longitude | decimal(10,7) | nullable=YES | default=NULL | key=- | extra=-
+- check_in_distance_meter | decimal(10,2) | nullable=YES | default=NULL | key=- | extra=-
+- check_in_is_inside_radius | tinyint(1) | nullable=YES | default=NULL | key=- | extra=-
+- check_in_work_mode_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- check_in_note | text | nullable=YES | default=NULL | key=- | extra=-
+- check_in_device_info | text | nullable=YES | default=NULL | key=- | extra=-
+- check_out_at | datetime | nullable=YES | default=NULL | key=- | extra=-
+- check_out_photo_attachment_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- check_out_latitude | decimal(10,7) | nullable=YES | default=NULL | key=- | extra=-
+- check_out_longitude | decimal(10,7) | nullable=YES | default=NULL | key=- | extra=-
+- check_out_distance_meter | decimal(10,2) | nullable=YES | default=NULL | key=- | extra=-
+- check_out_is_inside_radius | tinyint(1) | nullable=YES | default=NULL | key=- | extra=-
+- check_out_work_mode_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- check_out_note | text | nullable=YES | default=NULL | key=- | extra=-
+- check_out_device_info | text | nullable=YES | default=NULL | key=- | extra=-
+- total_work_minutes | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- late_minutes | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- early_leave_minutes | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- status_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- is_need_approval | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+- approved_by | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- approved_at | datetime | nullable=YES | default=NULL | key=- | extra=-
+- approval_note | text | nullable=YES | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: cache
+=================================================================================
+COLUMNS:
+- key | varchar(255) | nullable=NO | default=NULL | key=PRI | extra=-
+- value | mediumtext | nullable=NO | default=NULL | key=- | extra=-
+- expiration | bigint | nullable=NO | default=NULL | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: cache_locks
+=================================================================================
+COLUMNS:
+- key | varchar(255) | nullable=NO | default=NULL | key=PRI | extra=-
+- owner | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- expiration | bigint | nullable=NO | default=NULL | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: departments
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- name | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- description | text | nullable=YES | default=NULL | key=- | extra=-
+- parent_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: employee_schedules
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- employee_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- shift_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- schedule_date | date | nullable=NO | default=NULL | key=MUL | extra=-
+- is_day_off | tinyint(1) | nullable=NO | default=0 | key=- | extra=-
+- note | text | nullable=YES | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: employee_work_locations
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- employee_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- work_location_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- is_primary | tinyint(1) | nullable=NO | default=0 | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: employees
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- user_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- employee_number | varchar(255) | nullable=NO | default=NULL | key=UNI | extra=-
+- full_name | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- phone | varchar(30) | nullable=YES | default=NULL | key=- | extra=-
+- gender | varchar(20) | nullable=YES | default=NULL | key=- | extra=-
+- employee_type_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- department_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- position_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- work_location_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- shift_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- join_date | date | nullable=YES | default=NULL | key=- | extra=-
+- end_date | date | nullable=YES | default=NULL | key=- | extra=-
+- is_active | tinyint(1) | nullable=NO | default=1 | key=MUL | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: failed_jobs
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | varchar(255) | nullable=NO | default=NULL | key=UNI | extra=-
+- connection | varchar(255) | nullable=NO | default=NULL | key=MUL | extra=-
+- queue | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- payload | longtext | nullable=NO | default=NULL | key=- | extra=-
+- exception | longtext | nullable=NO | default=NULL | key=- | extra=-
+- failed_at | timestamp | nullable=NO | default=CURRENT_TIMESTAMP | key=- | extra=DEFAULT_GENERATED
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: holidays
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- name | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- holiday_date | date | nullable=NO | default=NULL | key=MUL | extra=-
+- description | text | nullable=YES | default=NULL | key=- | extra=-
+- is_national_holiday | tinyint(1) | nullable=NO | default=0 | key=- | extra=-
+- is_company_holiday | tinyint(1) | nullable=NO | default=0 | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: job_batches
+=================================================================================
+COLUMNS:
+- id | varchar(255) | nullable=NO | default=NULL | key=PRI | extra=-
+- name | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- total_jobs | int | nullable=NO | default=NULL | key=- | extra=-
+- pending_jobs | int | nullable=NO | default=NULL | key=- | extra=-
+- failed_jobs | int | nullable=NO | default=NULL | key=- | extra=-
+- failed_job_ids | longtext | nullable=NO | default=NULL | key=- | extra=-
+- options | mediumtext | nullable=YES | default=NULL | key=- | extra=-
+- cancelled_at | int | nullable=YES | default=NULL | key=- | extra=-
+- created_at | int | nullable=NO | default=NULL | key=- | extra=-
+- finished_at | int | nullable=YES | default=NULL | key=- | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: jobs
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- queue | varchar(255) | nullable=NO | default=NULL | key=MUL | extra=-
+- payload | longtext | nullable=NO | default=NULL | key=- | extra=-
+- attempts | smallint unsigned | nullable=NO | default=NULL | key=- | extra=-
+- reserved_at | int unsigned | nullable=YES | default=NULL | key=- | extra=-
+- available_at | int unsigned | nullable=NO | default=NULL | key=- | extra=-
+- created_at | int unsigned | nullable=NO | default=NULL | key=- | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: leave_balances
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- employee_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- year | smallint unsigned | nullable=NO | default=NULL | key=- | extra=-
+- total_quota | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- used_quota | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- remaining_quota | int unsigned | nullable=NO | default=0 | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: leave_request_details
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- leave_request_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- leave_date | date | nullable=NO | default=NULL | key=MUL | extra=-
+- attendance_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: leave_requests
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- employee_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- leave_type_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- start_date | date | nullable=NO | default=NULL | key=MUL | extra=-
+- end_date | date | nullable=NO | default=NULL | key=MUL | extra=-
+- total_days | int unsigned | nullable=NO | default=1 | key=- | extra=-
+- reason | text | nullable=YES | default=NULL | key=- | extra=-
+- attachment_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- status_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- approved_by | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- approved_at | datetime | nullable=YES | default=NULL | key=- | extra=-
+- approval_note | text | nullable=YES | default=NULL | key=- | extra=-
+- rejected_reason | text | nullable=YES | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: locations
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- wilayah_id | varchar(13) | nullable=NO | default=NULL | key=MUL | extra=-
+- name | varchar(255) | nullable=NO | default=NULL | key=MUL | extra=-
+- level_id | bigint unsigned | nullable=NO | default=NULL | key=MUL | extra=-
+- parent_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+Row 1:
+  id = 1
+  uuid = 026bef8f-8aa7-4d46-8492-5c52e046fd50
+  wilayah_id = 11
+  name = Aceh
+  level_id = 4
+  parent_id = NULL
+  created_at = 2026-06-08 09:09:53
+  created_by = NULL
+  updated_at = 2026-06-08 09:09:53
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+Row 2:
+  id = 2
+  uuid = 8752dace-821e-47b4-8fc2-d3fe52df04c0
+  wilayah_id = 12
+  name = Sumatera Utara
+  level_id = 4
+  parent_id = NULL
+  created_at = 2026-06-08 09:09:53
+  created_by = NULL
+  updated_at = 2026-06-08 09:09:53
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+Row 3:
+  id = 3
+  uuid = 55aeabe1-9ca0-4a9b-8f82-65d01f3c22b7
+  wilayah_id = 13
+  name = Sumatera Barat
+  level_id = 4
+  parent_id = NULL
+  created_at = 2026-06-08 09:09:53
+  created_by = NULL
+  updated_at = 2026-06-08 09:09:53
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+
+=================================================================================
+TABLE: migrations
+=================================================================================
+COLUMNS:
+- id | int unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- migration | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- batch | int | nullable=NO | default=NULL | key=- | extra=-
+
+SAMPLE ROWS (max 3):
+Row 1:
+  id = 1
+  migration = 000_000_001_000000_create_users_table
+  batch = 1
+Row 2:
+  id = 2
+  migration = 000_000_001_000001_create_cache_table
+  batch = 1
+Row 3:
+  id = 3
+  migration = 000_000_001_000002_create_jobs_table
+  batch = 1
+
+=================================================================================
+TABLE: password_reset_tokens
+=================================================================================
+COLUMNS:
+- email | varchar(255) | nullable=NO | default=NULL | key=PRI | extra=-
+- token | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: positions
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- name | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- description | text | nullable=YES | default=NULL | key=- | extra=-
+- department_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: references
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- code | varchar(100) | nullable=YES | default=NULL | key=MUL | extra=-
+- description | text | nullable=YES | default=NULL | key=- | extra=-
+- group_id | varchar(100) | nullable=YES | default=NULL | key=MUL | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+Row 1:
+  id = 1
+  uuid = cc806672-84e2-451d-9848-747fed0c5b1c
+  code = LL_KL
+  description = Kelurahan
+  group_id = location_level
+  created_at = 2026-06-08 09:09:53
+  created_by = NULL
+  updated_at = 2026-06-08 09:09:53
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+Row 2:
+  id = 2
+  uuid = 32c71866-ab0c-462e-8086-143a4e7b3a27
+  code = LL_KC
+  description = Kecamatan
+  group_id = location_level
+  created_at = 2026-06-08 09:09:53
+  created_by = NULL
+  updated_at = 2026-06-08 09:09:53
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+Row 3:
+  id = 3
+  uuid = 3f89cc66-9035-4791-a451-a8f8fb9fa353
+  code = LL_CT
+  description = Kota
+  group_id = location_level
+  created_at = 2026-06-08 09:09:53
+  created_by = NULL
+  updated_at = 2026-06-08 09:09:53
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+
+=================================================================================
+TABLE: roles
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- name | varchar(255) | nullable=NO | default=NULL | key=MUL | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+Row 1:
+  id = 1
+  uuid = b9a0ca36-7e0a-4d51-90e8-f5d7dae653cd
+  name = Admin
+  created_at = 2026-06-08 09:11:49
+  updated_at = 2026-06-08 09:11:50
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+Row 2:
+  id = 2
+  uuid = bf348200-7486-43f8-bc92-14e7f752a5c6
+  name = HRD
+  created_at = 2026-06-08 09:11:49
+  updated_at = 2026-06-08 09:11:49
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+Row 3:
+  id = 3
+  uuid = aa339876-c9e3-46d3-a39c-83ea511b0295
+  name = Employee
+  created_at = 2026-06-08 09:11:49
+  updated_at = 2026-06-08 09:11:50
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+
+=================================================================================
+TABLE: sessions
+=================================================================================
+COLUMNS:
+- id | varchar(255) | nullable=NO | default=NULL | key=PRI | extra=-
+- user_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- ip_address | varchar(45) | nullable=YES | default=NULL | key=- | extra=-
+- user_agent | text | nullable=YES | default=NULL | key=- | extra=-
+- payload | longtext | nullable=NO | default=NULL | key=- | extra=-
+- last_activity | int | nullable=NO | default=NULL | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: settings
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- code | varchar(100) | nullable=NO | default=NULL | key=MUL | extra=-
+- description | text | nullable=YES | default=NULL | key=- | extra=-
+- group_id | varchar(100) | nullable=YES | default=NULL | key=MUL | extra=-
+- type_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- value | text | nullable=YES | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+Row 1:
+  id = 1
+  uuid = 010a7d29-67c2-43dc-b320-7685843eebfb
+  code = ATTENDANCE_RADIUS_METER
+  description = Default radius absensi dalam meter
+  group_id = attendance
+  type_id = NULL
+  value = 100
+  created_at = 2026-06-08 09:11:51
+  created_by = NULL
+  updated_at = 2026-06-08 09:11:51
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+Row 2:
+  id = 2
+  uuid = 04d5b7da-2750-47f4-a956-a3594f9be89e
+  code = REQUIRE_SELFIE
+  description = Wajib selfie saat absensi
+  group_id = attendance
+  type_id = NULL
+  value = true
+  created_at = 2026-06-08 09:11:51
+  created_by = NULL
+  updated_at = 2026-06-08 09:11:51
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+Row 3:
+  id = 3
+  uuid = 368eaad1-3820-4b75-ad18-bcdd4336c2d3
+  code = REQUIRE_GPS
+  description = Wajib GPS aktif saat absensi
+  group_id = attendance
+  type_id = NULL
+  value = true
+  created_at = 2026-06-08 09:11:51
+  created_by = NULL
+  updated_at = 2026-06-08 09:11:51
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+
+=================================================================================
+TABLE: shifts
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- name | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- start_time | time | nullable=NO | default=NULL | key=- | extra=-
+- end_time | time | nullable=NO | default=NULL | key=- | extra=-
+- check_in_start_time | time | nullable=YES | default=NULL | key=- | extra=-
+- check_in_end_time | time | nullable=YES | default=NULL | key=- | extra=-
+- check_out_start_time | time | nullable=YES | default=NULL | key=- | extra=-
+- check_out_end_time | time | nullable=YES | default=NULL | key=- | extra=-
+- late_tolerance_minutes | int unsigned | nullable=NO | default=15 | key=- | extra=-
+- is_overnight | tinyint(1) | nullable=NO | default=0 | key=- | extra=-
+- is_active | tinyint(1) | nullable=NO | default=1 | key=MUL | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
+=================================================================================
+TABLE: users
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- name | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- email | varchar(255) | nullable=NO | default=NULL | key=UNI | extra=-
+- email_verified_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- password | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- remember_token | varchar(100) | nullable=YES | default=NULL | key=- | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- uuid | char(36) | nullable=YES | default=NULL | key=UNI | extra=-
+- username | varchar(255) | nullable=YES | default=NULL | key=MUL | extra=-
+- role_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- profile_image_attachment_id | bigint unsigned | nullable=YES | default=NULL | key=MUL | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+Row 1:
+  id = 1
+  name = Test User
+  email = test@example.com
+  email_verified_at = NULL
+  password = $2y$12$S.y3sbyqyvvlLOV9loGNnutWaDX32yH1OJSWLEtHWOdjwOomXC7gS
+  remember_token = NULL
+  created_at = 2026-06-08 09:09:51
+  updated_at = 2026-06-08 09:09:51
+  uuid = NULL
+  username = NULL
+  role_id = NULL
+  profile_image_attachment_id = NULL
+  created_by = NULL
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+Row 2:
+  id = 2
+  name = Admin
+  email = admin@klikabsen.local
+  email_verified_at = 2026-06-08 09:11:49
+  password = $2y$12$TU95iCPLSsGntoBuWXbHZOlCVt.zU7STvbJ1y8JF8RK/w9Ebj0sxq
+  remember_token = NULL
+  created_at = 2026-06-08 09:11:49
+  updated_at = 2026-06-08 09:11:49
+  uuid = 22f6b209-ef01-45f8-8df6-5b79ff8e6495
+  username = admin
+  role_id = 1
+  profile_image_attachment_id = NULL
+  created_by = NULL
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+Row 3:
+  id = 3
+  name = HRD
+  email = hrd@klikabsen.local
+  email_verified_at = 2026-06-08 09:11:49
+  password = $2y$12$vM7BQvxwcNl98k4WagUCeuYYNFpIUYZ0J9GjD1R8qrbO2XsI2UsOm
+  remember_token = NULL
+  created_at = 2026-06-08 09:11:49
+  updated_at = 2026-06-08 09:11:49
+  uuid = 26f185ad-7154-47dc-84f1-87542fe0c977
+  username = hrd
+  role_id = 2
+  profile_image_attachment_id = NULL
+  created_by = NULL
+  updated_by = NULL
+  deleted_at = NULL
+  deleted_by = NULL
+  delete_status = 0
+
+=================================================================================
+TABLE: wilayah
+=================================================================================
+COLUMNS:
+- kode | varchar(13) | nullable=NO | default=NULL | key=PRI | extra=-
+- nama | varchar(255) | nullable=NO | default=NULL | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+Row 1:
+  kode = 74.01.01.1001
+  nama = 19 Nopember
+Row 2:
+  kode = 13.05.04
+  nama = 2 x 11 Anam Lingkuang
+Row 3:
+  kode = 13.05.15
+  nama = 2 x 11 Kayu Tanam
+
+=================================================================================
+TABLE: work_locations
+=================================================================================
+COLUMNS:
+- id | bigint unsigned | nullable=NO | default=NULL | key=PRI | extra=auto_increment
+- uuid | char(36) | nullable=NO | default=NULL | key=UNI | extra=-
+- name | varchar(255) | nullable=NO | default=NULL | key=- | extra=-
+- address | text | nullable=YES | default=NULL | key=- | extra=-
+- latitude | decimal(10,7) | nullable=YES | default=NULL | key=- | extra=-
+- longitude | decimal(10,7) | nullable=YES | default=NULL | key=- | extra=-
+- radius_meter | int unsigned | nullable=NO | default=100 | key=- | extra=-
+- is_default | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+- is_active | tinyint(1) | nullable=NO | default=1 | key=MUL | extra=-
+- created_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- created_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- updated_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- updated_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- deleted_at | timestamp | nullable=YES | default=NULL | key=- | extra=-
+- deleted_by | bigint unsigned | nullable=YES | default=NULL | key=- | extra=-
+- delete_status | tinyint(1) | nullable=NO | default=0 | key=MUL | extra=-
+
+SAMPLE ROWS (max 3):
+(no rows)
+
