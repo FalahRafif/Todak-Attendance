@@ -51,5 +51,36 @@ return [
                 ['label' => 'Employees', 'route_name' => 'employees', 'active' => ['employees*'], 'roles' => [RoleName::Admin->value]],
             ],
         ],
+        [
+            'section' => 'Monitoring Absensi',
+            'items' => [
+                ['label' => 'Absensi Harian', 'route_name' => 'attendances', 'active' => ['attendances'], 'roles' => [RoleName::Hrd->value]],
+                ['label' => 'Belum Check-in', 'route_name' => 'attendances.not-checked-in', 'active' => ['attendances.not-checked-in'], 'roles' => [RoleName::Hrd->value]],
+                ['label' => 'Belum Check-out', 'route_name' => 'attendances.incomplete', 'active' => ['attendances.incomplete'], 'roles' => [RoleName::Hrd->value]],
+                ['label' => 'Terlambat', 'route_name' => 'attendances.late', 'active' => ['attendances.late'], 'roles' => [RoleName::Hrd->value]],
+                ['label' => 'Outside Radius', 'route_name' => 'attendances.outside-radius', 'active' => ['attendances.outside-radius'], 'roles' => [RoleName::Hrd->value]],
+            ],
+        ],
+        [
+            'section' => 'Approval',
+            'items' => [
+                ['label' => 'Leave Requests', 'route_name' => 'leave-requests', 'active' => ['leave-requests*'], 'roles' => [RoleName::Hrd->value]],
+                ['label' => 'Attendance Corrections', 'route_name' => 'attendance-corrections', 'active' => ['attendance-corrections*'], 'roles' => [RoleName::Hrd->value]],
+            ],
+        ],
+        [
+            'section' => 'Reports',
+            'items' => [
+                ['label' => 'Daily Attendance', 'route_name' => 'reports.daily-attendance', 'active' => ['reports.daily-attendance*'], 'roles' => [RoleName::Hrd->value]],
+                ['label' => 'Monthly Attendance', 'route_name' => 'reports.monthly-attendance', 'active' => ['reports.monthly-attendance*'], 'roles' => [RoleName::Hrd->value]],
+            ],
+        ],
+        [
+            'section' => 'HR Data',
+            'items' => [
+                ['label' => 'Employee Schedules', 'route_name' => 'employee-schedules', 'active' => ['employee-schedules*'], 'roles' => [RoleName::Hrd->value]],
+                ['label' => 'Leave Balances', 'route_name' => 'leave-balances', 'active' => ['leave-balances*'], 'roles' => [RoleName::Hrd->value]],
+            ],
+        ],
     ],
 ];
