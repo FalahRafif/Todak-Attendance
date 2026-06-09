@@ -24,6 +24,10 @@
     $displayRole = trim((string) ($sessionUser['role'] ?? (($authUser instanceof \App\Models\User) ? $authUser->roleName() : 'Internal')));
     $displayEmail = trim((string) ($sessionUser['email'] ?? $authUser?->email ?? ''));
     $displayProfileImageUrl = trim((string) ($sessionUser['profile_image_url'] ?? ''));
+    if ($displayProfileImageUrl === '' && $authUser instanceof \App\Models\User) {
+        $authUser->loadMissing('profileImageAttachment');
+        $displayProfileImageUrl = (string) app(\App\Services\AttachmentSecurityService::class)->generateTemporaryPreviewUrl($authUser->profileImageAttachment);
+    }
     if ($displayProfileImageUrl === '') {
         $displayProfileImageUrl = asset('assets/images/faces/2.jpg');
     }
