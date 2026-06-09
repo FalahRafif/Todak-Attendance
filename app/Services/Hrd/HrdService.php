@@ -61,7 +61,7 @@ class HrdService
         $checkedInEmployeeIds = Attendance::query()->whereDate('attendance_date', $date)->pluck('employee_id');
 
         return [
-            'title' => 'Belum Check-in',
+            'title' => 'Belum Absen Masuk',
             'items' => Employee::query()->with(['department', 'position', 'workLocation', 'shift'])->where('is_active', true)->whereNotIn('id', $checkedInEmployeeIds)->orderBy('full_name')->paginate(15)->withQueryString(),
             'date' => $date,
         ];
@@ -69,7 +69,7 @@ class HrdService
 
     public function attendanceDetailData(int $id): array
     {
-        return ['title' => 'Detail Attendance', 'item' => $this->attendanceBaseQuery()->with('logs')->findOrFail($id)];
+        return ['title' => 'Detail Absensi', 'item' => $this->attendanceBaseQuery()->with('logs')->findOrFail($id)];
     }
 
     public function approveAttendance(int $id, ?string $note): void
@@ -84,12 +84,12 @@ class HrdService
 
     public function leaveRequestListData(): array
     {
-        return ['title' => 'Leave Requests', 'items' => LeaveRequest::query()->with(['employee.department', 'leaveType', 'status'])->latest('start_date')->paginate(15)];
+        return ['title' => 'Pengajuan Izin/Cuti', 'items' => LeaveRequest::query()->with(['employee.department', 'leaveType', 'status'])->latest('start_date')->paginate(15)];
     }
 
     public function leaveRequestDetailData(int $id): array
     {
-        return ['title' => 'Detail Leave Request', 'item' => LeaveRequest::query()->with(['employee.department', 'leaveType', 'status', 'details'])->findOrFail($id)];
+        return ['title' => 'Detail Pengajuan Izin/Cuti', 'item' => LeaveRequest::query()->with(['employee.department', 'leaveType', 'status', 'details'])->findOrFail($id)];
     }
 
     public function approveLeaveRequest(int $id, ?string $note): void
@@ -106,19 +106,22 @@ class HrdService
 
     public function correctionListData(): array
     {
-        return ['title' => 'Attendance Corrections', 'items' => AttendanceCorrectionRequest::query()->with(['employee.department', 'attendance', 'status'])->latest('correction_date')->paginate(15)];
+        return ['title' => 'Koreksi Absensi', 'items' => AttendanceCorrectionRequest::query()->with(['employee.department', 'attendance', 'status'])->latest('correction_date')->paginate(15)];
     }
 
     public function correctionDetailData(int $id): array
     {
-        return ['title' => 'Detail Attendance Correction', 'item' => AttendanceCorrectionRequest::query()->with(['employee.department', 'attendance', 'status'])->findOrFail($id)];
+        return ['title' => 'Detail Koreksi Absensi', 'item' => AttendanceCorrectionRequest::query()->with(['employee.department', 'attendance', 'status'])->findOrFail($id)];
     }
 
     public function approveCorrection(int $id, ?string $note): void
     {
         $correction = AttendanceCorrectionRequest::query()->with('employee')->findOrFail($id);
-        $attendance = Attendance::query()->firstOrCreate(['employee_id' => $correction->employee_id, 'attendance_date' => $correction->correction_date], ['uuid' => (string) Str::uuid(), 'shift_id' => $correction->employee?->shift_id, 'work_location_id' => $correction->employee?->work_location_id, 'status_id' => $this->attendanceStatusId('present'), 'created_by' => auth()->id()]);
-        $attendance->update(['check_in_at' => $correction->requested_check_in_at, 'check_out_at' => $correction->requested_check_out_at, 'status_id' => $this->attendanceStatusId('present'), 'updated_by' => auth()->id()]);
+        $attendance = Attendance::query()->with('shift')->firstOrCreate(['employee_id' => $correction->employee_id, 'attendance_date' => $correction->correction_date], ['uuid' => (string) Str::uuid(), 'shift_id' => $correction->employee?->shift_id, 'work_location_id' => $correction->employee?->work_location_id, 'status_id' => $this->attendanceStatusId('present'), 'created_by' => auth()->id()]);
+        $checkInAt = $correction->requested_check_in_at ?? $attendance->check_in_at;
+        $checkOutAt = $correction->requested_check_out_at ?? $attendance->check_out_at;
+
+        $attendance->update(array_merge(['check_in_at' => $checkInAt, 'check_out_at' => $checkOutAt, 'status_id' => $this->attendanceStatusId('present'), 'updated_by' => auth()->id()], $this->correctedAttendanceMetrics($attendance->refresh(), $checkInAt, $checkOutAt)));
         AttendanceLog::query()->create(['uuid' => (string) Str::uuid(), 'attendance_id' => $attendance->id, 'employee_id' => $correction->employee_id, 'action_type_id' => $this->attendanceActionTypeId('update_by_hrd'), 'action_at' => now(), 'note' => $note ?? $correction->reason, 'source' => 'hrd', 'created_by' => auth()->id()]);
         $correction->update(['attendance_id' => $attendance->id, 'status_id' => $this->approvalStatusId('approved'), 'approved_by' => auth()->id(), 'approved_at' => now(), 'approval_note' => $note, 'updated_by' => auth()->id()]);
     }
@@ -130,12 +133,12 @@ class HrdService
 
     public function scheduleListData(): array
     {
-        return ['title' => 'Employee Schedules', 'items' => EmployeeSchedule::query()->with(['employee.department', 'shift'])->latest('schedule_date')->paginate(15)];
+        return ['title' => 'Jadwal Karyawan', 'items' => EmployeeSchedule::query()->with(['employee.department', 'shift'])->latest('schedule_date')->paginate(15)];
     }
 
     public function leaveBalanceListData(): array
     {
-        return ['title' => 'Leave Balances', 'items' => LeaveBalance::query()->with(['employee.department', 'leaveType'])->latest('year')->paginate(15)];
+        return ['title' => 'Saldo Cuti', 'items' => LeaveBalance::query()->with(['employee.department', 'leaveType'])->latest('year')->paginate(15)];
     }
 
     public function monthlyReportData(Request $request): array
@@ -143,7 +146,7 @@ class HrdService
         $year = (int) $request->input('year', now()->year);
         $month = (int) $request->input('month', now()->month);
 
-        return ['title' => 'Monthly Attendance Report', 'items' => AttendanceMonthlySummary::query()->with('employee.department')->where('year', $year)->where('month', $month)->paginate(15)->withQueryString(), 'year' => $year, 'month' => $month];
+        return ['title' => 'Laporan Absensi Bulanan', 'items' => AttendanceMonthlySummary::query()->with('employee.department')->where('year', $year)->where('month', $month)->paginate(15)->withQueryString(), 'year' => $year, 'month' => $month];
     }
 
     public function generateMonthlyReport(array $payload): void
@@ -158,7 +161,7 @@ class HrdService
 
     public function dailyExportRows(Request $request): array
     {
-        return $this->attendancePageData($request, 'Daily Attendance Report', null, false)['items']->map(fn (Attendance $item): array => [$item->attendance_date?->format('Y-m-d'), $item->employee?->full_name, $item->employee?->department?->name, $item->check_in_at?->format('H:i'), $item->check_out_at?->format('H:i'), $item->late_minutes, $item->status?->description])->all();
+        return $this->attendancePageData($request, 'Laporan Absensi Harian', null, false)['items']->map(fn (Attendance $item): array => [$item->attendance_date?->format('Y-m-d'), $item->employee?->full_name, $item->employee?->department?->name, $item->check_in_at?->format('H:i'), $item->check_out_at?->format('H:i'), $item->late_minutes, $item->status?->description])->all();
     }
 
     public function monthlyExportRows(Request $request): array
@@ -179,6 +182,33 @@ class HrdService
         return $this->attendanceBaseQuery()->where(function ($query): void {
             $query->where('is_need_approval', true)->orWhere('check_in_is_inside_radius', false)->orWhere('check_out_is_inside_radius', false);
         });
+    }
+
+    private function correctedAttendanceMetrics(Attendance $attendance, ?Carbon $checkInAt, ?Carbon $checkOutAt): array
+    {
+        $attendance->loadMissing('shift');
+        $lateMinutes = 0;
+        $totalWorkMinutes = 0;
+        $earlyLeaveMinutes = 0;
+
+        if ($checkInAt !== null && $attendance->shift?->start_time !== null) {
+            $shiftStart = Carbon::parse($attendance->attendance_date?->format('Y-m-d').' '.$attendance->shift->start_time);
+            $lateMinutes = max(0, $shiftStart->diffInMinutes($checkInAt, false));
+        }
+
+        if ($checkInAt !== null && $checkOutAt !== null) {
+            $totalWorkMinutes = max(0, $checkInAt->diffInMinutes($checkOutAt, false));
+        }
+
+        if ($checkOutAt !== null && $attendance->shift?->end_time !== null) {
+            $shiftEnd = Carbon::parse($attendance->attendance_date?->format('Y-m-d').' '.$attendance->shift->end_time);
+            if ($attendance->shift->is_overnight && $shiftEnd->lte($checkInAt ?? $shiftEnd)) {
+                $shiftEnd->addDay();
+            }
+            $earlyLeaveMinutes = max(0, $checkOutAt->diffInMinutes($shiftEnd, false));
+        }
+
+        return ['late_minutes' => $lateMinutes, 'total_work_minutes' => $totalWorkMinutes, 'early_leave_minutes' => $earlyLeaveMinutes];
     }
 
     private function applyAttendanceFilters($query, Request $request): void
