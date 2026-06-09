@@ -8,6 +8,13 @@
 
 	@include('layouts.admin.assets')
 	@stack('styles')
+	<style>
+		@media (min-width: 992px) {
+			.app-content {
+				margin-block-start: 5rem !important;
+			}
+		}
+	</style>
 </head>
 <body>
 	@include('layouts.admin.switcher')
