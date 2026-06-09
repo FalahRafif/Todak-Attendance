@@ -84,6 +84,170 @@
             color: var(--text-muted, #9ca3af) !important;
         }
 
+        .ka-page-title {
+            font-size: 1.55rem;
+            font-weight: 700;
+            letter-spacing: -.02em;
+            margin-bottom: .25rem;
+        }
+
+        .ka-page-subtitle {
+            color: #64748b;
+            margin-bottom: 0;
+        }
+
+        .ka-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .ka-card {
+            border: 1px solid #e5edf7;
+            border-radius: 18px;
+            box-shadow: 0 10px 28px rgba(15, 76, 129, .06);
+            overflow: hidden;
+        }
+
+        .ka-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.1rem 1.25rem;
+            background: linear-gradient(135deg, rgba(15, 76, 129, .08), rgba(15, 76, 129, .01));
+            border-bottom: 1px solid #e5edf7;
+        }
+
+        .ka-search {
+            max-width: 320px;
+            border-radius: 999px;
+            padding-left: 1rem;
+        }
+
+        .ka-table {
+            margin-bottom: 0;
+        }
+
+        .ka-table thead th {
+            background-color: #f8fbff;
+            color: #334155;
+            font-size: .76rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            border-bottom: 1px solid #e5edf7;
+            white-space: nowrap;
+        }
+
+        .ka-table tbody td {
+            vertical-align: middle;
+            color: #0f172a;
+            border-color: #edf2f7;
+        }
+
+        .ka-table tbody tr:hover td {
+            background-color: rgba(15, 76, 129, .035);
+        }
+
+        .ka-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #0f4c81;
+            background: rgba(15, 76, 129, .1);
+        }
+
+        .ka-badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: .32rem .65rem;
+            font-size: .75rem;
+            font-weight: 700;
+        }
+
+        .ka-badge-primary {
+            color: #0f4c81;
+            background: rgba(15, 76, 129, .1);
+        }
+
+        .ka-badge-success {
+            color: #047857;
+            background: rgba(16, 185, 129, .12);
+        }
+
+        .ka-badge-muted {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+        .ka-action-group {
+            display: inline-flex;
+            gap: .4rem;
+        }
+
+        .ka-action-group .btn {
+            border-radius: 10px;
+            padding: .38rem .7rem;
+            font-weight: 700;
+        }
+
+        .ka-form-card .card-body {
+            padding: 1.5rem;
+        }
+
+        .ka-form-section {
+            padding: 1rem;
+            border: 1px solid #e5edf7;
+            border-radius: 14px;
+            background: #fbfdff;
+            margin-bottom: 1rem;
+        }
+
+        .ka-form-section-title {
+            font-size: .82rem;
+            font-weight: 800;
+            color: #0f4c81;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            margin-bottom: 1rem;
+        }
+
+        .ka-form-card .form-control,
+        .ka-form-card .form-select {
+            border-radius: 12px;
+            min-height: 42px;
+        }
+
+        [data-theme-mode="dark"] .ka-card {
+            border-color: #334155;
+            box-shadow: none;
+        }
+
+        [data-theme-mode="dark"] .ka-card-header,
+        [data-theme-mode="dark"] .ka-form-section,
+        [data-theme-mode="dark"] .ka-table thead th {
+            background: rgba(15, 23, 42, .8);
+            border-color: #334155;
+            color: #e5e7eb;
+        }
+
+        [data-theme-mode="dark"] .ka-table tbody td {
+            color: #e5e7eb;
+            border-color: #334155;
+        }
+
+        [data-theme-mode="dark"] .ka-page-subtitle {
+            color: #9ca3af;
+        }
+
         .side-menu__item.active,
         .side-menu__item:hover {
             color: #0f4c81 !important;

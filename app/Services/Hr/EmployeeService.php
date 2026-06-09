@@ -2,6 +2,8 @@
 
 namespace App\Services\Hr;
 
+use App\Services\AttachmentSecurityService;
+use App\Repositories\Contracts\AttachmentRepositoryInterface;
 use App\Repositories\Contracts\DepartmentRepositoryInterface;
 use App\Repositories\Contracts\EmployeeRepositoryInterface;
 use App\Repositories\Contracts\EmployeeWorkLocationRepositoryInterface;
@@ -12,6 +14,7 @@ use App\Repositories\Contracts\RoleRepositoryInterface;
 use App\Repositories\Contracts\ShiftRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Repositories\Contracts\WorkLocationRepositoryInterface;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -27,7 +30,9 @@ class EmployeeService
         private ShiftRepositoryInterface $shiftRepository,
         private ReferenceRepositoryInterface $referenceRepository,
         private UserRepositoryInterface $userRepository,
-        private RoleRepositoryInterface $roleRepository
+        private RoleRepositoryInterface $roleRepository,
+        private AttachmentRepositoryInterface $attachmentRepository,
+        private AttachmentSecurityService $attachmentSecurityService
     ) {
     }
 
@@ -35,18 +40,19 @@ class EmployeeService
     {
         return [
             'title' => 'User & Employee Management',
-            'items' => $this->userRepository->query()->with(['role', 'employee.department', 'employee.position'])->latest('id')->paginate(15),
+            'items' => $this->userRepository->query()->with(['role', 'profileImageAttachment', 'employee.department', 'employee.position'])->latest('id')->paginate(15),
         ];
     }
 
     public function formData(?int $id = null): array
     {
-        $user = $id === null ? null : $this->userRepository->findOrFail($id, ['*'], ['role', 'employee']);
+        $user = $id === null ? null : $this->userRepository->findOrFail($id, ['*'], ['role', 'employee', 'profileImageAttachment']);
 
         return array_merge($this->masterData(), [
             'title' => $id === null ? 'Create User' : 'Edit User',
             'user' => $user,
             'employee' => $user?->employee,
+            'profileImageUrl' => $this->attachmentSecurityService->generateTemporaryPreviewUrl($user?->profileImageAttachment),
         ]);
     }
 
@@ -54,6 +60,7 @@ class EmployeeService
     {
         return DB::transaction(function () use ($payload) {
             $user = $this->userRepository->create($this->userPayload($payload));
+            $this->syncProfileImage($user->id, $payload['profile_image'] ?? null);
 
             if (!$this->isEmployeeRole((int) $payload['role_id'])) {
                 return $user;
@@ -67,6 +74,7 @@ class EmployeeService
     {
         return DB::transaction(function () use ($id, $payload) {
             $this->userRepository->update($id, $this->userPayload($payload, false));
+            $this->syncProfileImage($id, $payload['profile_image'] ?? null);
             $employee = $this->employeeRepository->query()->where('user_id', $id)->first();
 
             if (!$this->isEmployeeRole((int) $payload['role_id'])) {
@@ -99,6 +107,25 @@ class EmployeeService
     public function assignWorkLocation(array $payload)
     {
         return $this->employeeWorkLocationRepository->create(array_merge($payload, ['uuid' => (string) Str::uuid()]));
+    }
+
+    private function syncProfileImage(int $userId, mixed $file): void
+    {
+        if (!$file instanceof UploadedFile) {
+            return;
+        }
+
+        $stored = $this->attachmentSecurityService->storeEncryptedProfileImage($file);
+        $type = $this->referenceRepository->findBy('code', 'TF_IMG');
+        $attachment = $this->attachmentRepository->create([
+            'uuid' => (string) Str::uuid(),
+            'name' => $file->getClientOriginalName(),
+            'path' => $stored['encrypted_path'],
+            'type_file' => $type?->id,
+            'created_by' => auth()->id(),
+        ]);
+
+        $this->userRepository->update($userId, ['profile_image_attachment_id' => $attachment->id]);
     }
 
     private function masterData(): array
