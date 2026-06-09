@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Web\Employee\Attendance\AttendanceCalendarController;
 use App\Http\Controllers\Web\Employee\Attendance\AttendanceController;
 use App\Http\Controllers\Web\Employee\Attendance\AttendanceHistoryController;
 use App\Http\Controllers\Web\Employee\DashboardController;
@@ -16,6 +17,7 @@ Route::prefix('employee')->name('employee.')->middleware(['auth', 'role:Employee
     Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])->name('attendance.check-in.store');
     Route::get('/attendance/check-out', [AttendanceController::class, 'checkOutForm'])->name('attendance.check-out');
     Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])->name('attendance.check-out.store');
+    Route::get('/attendance/calendar', AttendanceCalendarController::class)->name('attendance.calendar');
     Route::get('/attendance/history', [AttendanceHistoryController::class, 'index'])->name('attendance.history');
     Route::get('/attendance/history/{id}', [AttendanceHistoryController::class, 'show'])->name('attendance.history.show');
     Route::get('/leave-requests', [LeaveRequestController::class, 'index'])->name('leave-requests');
@@ -29,4 +31,5 @@ Route::prefix('employee')->name('employee.')->middleware(['auth', 'role:Employee
     Route::get('/attendance-corrections/{id}', [AttendanceCorrectionController::class, 'show'])->name('attendance-corrections.show');
     Route::post('/attendance-corrections/{id}/cancel', [AttendanceCorrectionController::class, 'cancel'])->name('attendance-corrections.cancel');
     Route::get('/profile', ProfileController::class)->name('profile');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });

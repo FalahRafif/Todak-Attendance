@@ -11,9 +11,9 @@ use RuntimeException;
 
 class LeaveRequestController extends Controller
 {
-    public function index(EmployeePortalService $employeePortalService): View
+    public function index(Request $request, EmployeePortalService $employeePortalService): View
     {
-        return view('pages.employee.leave-requests.index', $employeePortalService->leaveListData());
+        return view('pages.employee.leave-requests.index', $employeePortalService->leaveListData($request));
     }
 
     public function create(EmployeePortalService $employeePortalService): View

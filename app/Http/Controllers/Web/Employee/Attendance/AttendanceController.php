@@ -16,14 +16,27 @@ class AttendanceController extends Controller
         return view('pages.employee.attendance.today', $employeePortalService->attendanceData());
     }
 
-    public function checkInForm(EmployeePortalService $employeePortalService): View
+    public function checkInForm(EmployeePortalService $employeePortalService): View|RedirectResponse
     {
-        return view('pages.employee.attendance.form', $employeePortalService->attendanceFormData('check_in'));
+        $data = $employeePortalService->attendanceFormData('check_in');
+        if ($data['todayAttendance'] !== null) {
+            return redirect()->route('employee.attendance')->with('error', 'Check-in hari ini sudah dilakukan.');
+        }
+
+        return view('pages.employee.attendance.form', $data);
     }
 
-    public function checkOutForm(EmployeePortalService $employeePortalService): View
+    public function checkOutForm(EmployeePortalService $employeePortalService): View|RedirectResponse
     {
-        return view('pages.employee.attendance.form', $employeePortalService->attendanceFormData('check_out'));
+        $data = $employeePortalService->attendanceFormData('check_out');
+        if ($data['todayAttendance'] === null || $data['todayAttendance']->check_in_at === null) {
+            return redirect()->route('employee.attendance')->with('error', 'Check-out aktif setelah check-in.');
+        }
+        if ($data['todayAttendance']->check_out_at !== null) {
+            return redirect()->route('employee.attendance')->with('error', 'Check-out hari ini sudah dilakukan.');
+        }
+
+        return view('pages.employee.attendance.form', $data);
     }
 
     public function checkIn(Request $request, EmployeePortalService $employeePortalService): RedirectResponse

@@ -11,9 +11,9 @@ use RuntimeException;
 
 class AttendanceCorrectionController extends Controller
 {
-    public function index(EmployeePortalService $employeePortalService): View
+    public function index(Request $request, EmployeePortalService $employeePortalService): View
     {
-        return view('pages.employee.attendance-corrections.index', $employeePortalService->correctionListData());
+        return view('pages.employee.attendance-corrections.index', $employeePortalService->correctionListData($request));
     }
 
     public function create(EmployeePortalService $employeePortalService): View

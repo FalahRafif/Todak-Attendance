@@ -7,11 +7,15 @@ use App\Models\Attendance;
 use App\Models\AttendanceCorrectionRequest;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
+use App\Models\Holiday;
 use App\Models\LeaveRequest;
 use App\Models\Reference;
+use App\Models\User;
+use App\Services\AttachmentSecurityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -22,17 +26,17 @@ class EmployeePortalService
     {
         $employee = $this->employee();
 
-        return ['title' => 'Employee Dashboard', 'employee' => $employee, 'todayAttendance' => $this->todayAttendance(), 'monthlyAttendances' => $this->historyQuery()->limit(5)->get(), 'pendingLeaves' => LeaveRequest::query()->where('employee_id', $employee->id)->where('status_id', $this->approvalStatusId('pending'))->count(), 'pendingCorrections' => AttendanceCorrectionRequest::query()->where('employee_id', $employee->id)->where('status_id', $this->approvalStatusId('pending'))->count()];
+        return ['title' => 'Dashboard Karyawan', 'employee' => $employee, 'todayAttendance' => $this->todayAttendance(), 'monthlyAttendances' => $this->historyQuery()->whereBetween('attendance_date', [now()->startOfWeek(), now()->endOfWeek()])->limit(7)->get(), 'pendingLeaves' => LeaveRequest::query()->where('employee_id', $employee->id)->where('status_id', $this->approvalStatusId('pending'))->count(), 'pendingCorrections' => AttendanceCorrectionRequest::query()->where('employee_id', $employee->id)->where('status_id', $this->approvalStatusId('pending'))->count()];
     }
 
     public function attendanceData(): array
     {
-        return ['title' => 'Attendance Today', 'employee' => $this->employee(), 'todayAttendance' => $this->todayAttendance()];
+        return ['title' => 'Absensi Hari Ini', 'employee' => $this->employee(), 'todayAttendance' => $this->todayAttendance()];
     }
 
     public function attendanceFormData(string $type): array
     {
-        return ['title' => $type === 'check_in' ? 'Check-in' : 'Check-out', 'employee' => $this->employee(), 'todayAttendance' => $this->todayAttendance(), 'type' => $type];
+        return ['title' => $type === 'check_in' ? 'Absen Masuk' : 'Absen Pulang', 'employee' => $this->employee(), 'todayAttendance' => $this->todayAttendance(), 'type' => $type];
     }
 
     public function checkIn(array $payload, Request $request): void
@@ -40,7 +44,7 @@ class EmployeePortalService
         $employee = $this->employee();
         $this->ensureEmployeeCanAttend($employee);
         if ($this->todayAttendance() !== null) {
-            throw new RuntimeException('Check-in hari ini sudah ada.');
+            throw new RuntimeException('Absen masuk hari ini sudah tercatat.');
         }
 
         DB::transaction(function () use ($employee, $payload, $request): void {
@@ -59,10 +63,10 @@ class EmployeePortalService
         $this->ensureEmployeeCanAttend($employee);
         $attendance = $this->todayAttendance();
         if ($attendance === null || $attendance->check_in_at === null) {
-            throw new RuntimeException('Check-in belum ada.');
+            throw new RuntimeException('Absen masuk belum tercatat.');
         }
         if ($attendance->check_out_at !== null) {
-            throw new RuntimeException('Check-out hari ini sudah ada.');
+            throw new RuntimeException('Absen pulang hari ini sudah tercatat.');
         }
 
         DB::transaction(function () use ($employee, $attendance, $payload, $request): void {
@@ -78,28 +82,99 @@ class EmployeePortalService
     public function historyData(Request $request): array
     {
         $month = Carbon::parse($request->input('month', now()->format('Y-m')));
+        $query = $this->historyQuery()->whereYear('attendance_date', $month->year)->whereMonth('attendance_date', $month->month);
+        $query->when($request->filled('status_id'), fn ($q) => $q->where('status_id', $request->integer('status_id')));
 
-        return ['title' => 'Attendance History', 'month' => $month, 'items' => $this->historyQuery()->whereYear('attendance_date', $month->year)->whereMonth('attendance_date', $month->month)->paginate(15)->withQueryString()];
+        return ['title' => 'Riwayat Absensi', 'month' => $month, 'items' => $query->paginate(10)->withQueryString(), 'statuses' => Reference::query()->whereIn('description', ['present', 'late', 'leave', 'sick', 'permission', 'pending_approval'])->orderBy('description')->get()];
+    }
+
+    public function calendarData(Request $request): array
+    {
+        $employee = $this->employee();
+        $start = Carbon::parse($request->input('start_date', now()->startOfMonth()->format('Y-m-d')))->startOfDay();
+        $end = Carbon::parse($request->input('end_date', now()->endOfMonth()->format('Y-m-d')))->endOfDay();
+        if ($start->diffInMonths($end) > 2 || $end->lt($start)) {
+            $end = $start->copy()->addMonths(2)->endOfMonth();
+        }
+        $attendanceEvents = Attendance::query()
+            ->with(['shift', 'workLocation', 'status'])
+            ->where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '>=', $start)
+            ->whereDate('attendance_date', '<=', $end)
+            ->orderBy('attendance_date')
+            ->get()
+            ->map(function (Attendance $attendance): array {
+                $lateTolerance = $attendance->shift?->late_tolerance_minutes ?? 0;
+                $outsideRadius = $attendance->check_in_is_inside_radius === false || $attendance->check_out_is_inside_radius === false;
+                $incomplete = $attendance->check_in_at !== null && $attendance->check_out_at === null;
+                $color = '#10b981';
+                if ($outsideRadius || $attendance->is_need_approval) {
+                    $color = '#f59e0b';
+                }
+                if ($attendance->late_minutes > $lateTolerance) {
+                    $color = '#ef4444';
+                }
+                if ($incomplete) {
+                    $color = '#6366f1';
+                }
+
+                $checkIn = $attendance->check_in_at;
+                $checkOut = $attendance->check_out_at;
+                $title = $incomplete ? 'Belum absen pulang' : friendly_label($attendance->status?->description);
+
+                return ['id' => 'attendance-'.$attendance->id, 'title' => $title, 'start' => ($checkIn ?? $attendance->attendance_date?->startOfDay())?->toIso8601String(), 'end' => $checkOut?->toIso8601String(), 'allDay' => $checkIn === null, 'url' => route('employee.attendance.history.show', $attendance->id), 'backgroundColor' => $color, 'borderColor' => $color, 'extendedProps' => ['checkIn' => $attendance->check_in_at?->format('H:i') ?? '--:--', 'checkOut' => $attendance->check_out_at?->format('H:i') ?? '--:--', 'late' => $attendance->late_minutes, 'lateTolerance' => $lateTolerance, 'workMinutes' => $attendance->total_work_minutes, 'outsideRadius' => $outsideRadius, 'needApproval' => $attendance->is_need_approval, 'type' => 'attendance']];
+            });
+        $holidayEvents = Holiday::query()
+            ->whereDate('holiday_date', '>=', $start)
+            ->whereDate('holiday_date', '<=', $end)
+            ->orderBy('holiday_date')
+            ->get()
+            ->map(fn (Holiday $holiday): array => ['id' => 'holiday-'.$holiday->id, 'title' => $holiday->name, 'start' => $holiday->holiday_date?->format('Y-m-d'), 'allDay' => true, 'backgroundColor' => '#dc2626', 'borderColor' => '#dc2626', 'display' => 'block', 'extendedProps' => ['type' => 'holiday']]);
+        $leaveEvents = LeaveRequest::query()
+            ->with(['leaveType', 'status'])
+            ->where('employee_id', $employee->id)
+            ->where('status_id', $this->approvalStatusId('approved'))
+            ->whereDate('start_date', '<=', $end)
+            ->whereDate('end_date', '>=', $start)
+            ->get()
+            ->flatMap(function (LeaveRequest $leave): array {
+                $events = [];
+                foreach (Carbon::parse($leave->start_date)->daysUntil(Carbon::parse($leave->end_date)->addDay()) as $date) {
+                    $events[] = ['id' => 'leave-'.$leave->id.'-'.$date->format('Ymd'), 'title' => friendly_label($leave->leaveType?->description), 'start' => $date->format('Y-m-d'), 'allDay' => true, 'backgroundColor' => '#8b5cf6', 'borderColor' => '#8b5cf6', 'extendedProps' => ['type' => 'leave']];
+                }
+
+                return $events;
+            });
+
+        return ['title' => 'Kalender Absensi', 'startDate' => $start, 'endDate' => $end, 'events' => $attendanceEvents->merge($holidayEvents)->merge($leaveEvents)->values()];
     }
 
     public function attendanceDetailData(int $id): array
     {
-        return ['title' => 'Attendance Detail', 'item' => Attendance::query()->with(['shift', 'workLocation', 'status', 'logs'])->where('employee_id', $this->employee()->id)->findOrFail($id)];
+        return ['title' => 'Detail Absensi', 'item' => Attendance::query()->with(['shift', 'workLocation', 'status', 'logs'])->where('employee_id', $this->employee()->id)->findOrFail($id)];
     }
 
-    public function leaveListData(): array
+    public function leaveListData(Request $request): array
     {
-        return ['title' => 'Leave Requests', 'items' => LeaveRequest::query()->with(['leaveType', 'status'])->where('employee_id', $this->employee()->id)->latest('start_date')->paginate(15)];
+        $query = LeaveRequest::query()->with(['leaveType', 'status'])->where('employee_id', $this->employee()->id);
+        $query->when($request->filled('status_id'), fn ($q) => $q->where('status_id', $request->integer('status_id')))
+            ->when($request->filled('leave_type_id'), fn ($q) => $q->where('leave_type_id', $request->integer('leave_type_id')))
+            ->when($request->filled('month'), function ($q) use ($request): void {
+                $month = Carbon::parse($request->input('month'));
+                $q->whereYear('start_date', $month->year)->whereMonth('start_date', $month->month);
+            });
+
+        return ['title' => 'Pengajuan Izin/Cuti', 'items' => $query->latest('start_date')->paginate(10)->withQueryString(), 'statuses' => $this->approvalStatuses(), 'leaveTypes' => Reference::query()->whereIn('description', ['annual_leave', 'sick_leave', 'permission'])->get()];
     }
 
     public function leaveFormData(): array
     {
-        return ['title' => 'Create Leave Request', 'leaveTypes' => Reference::query()->whereIn('description', ['annual_leave', 'sick_leave', 'permission'])->get()];
+        return ['title' => 'Buat Pengajuan Izin/Cuti', 'leaveTypes' => Reference::query()->whereIn('description', ['annual_leave', 'sick_leave', 'permission'])->get()];
     }
 
     public function leaveDetailData(int $id): array
     {
-        return ['title' => 'Leave Request Detail', 'item' => LeaveRequest::query()->with(['leaveType', 'status'])->where('employee_id', $this->employee()->id)->findOrFail($id)];
+        return ['title' => 'Detail Pengajuan Izin/Cuti', 'item' => LeaveRequest::query()->with(['leaveType', 'status'])->where('employee_id', $this->employee()->id)->findOrFail($id)];
     }
 
     public function createLeave(array $payload): void
@@ -113,24 +188,31 @@ class EmployeePortalService
     {
         $item = LeaveRequest::query()->where('employee_id', $this->employee()->id)->findOrFail($id);
         if ($item->status_id !== $this->approvalStatusId('pending')) {
-            throw new RuntimeException('Hanya pending yang bisa dibatalkan.');
+            throw new RuntimeException('Hanya pengajuan yang masih menunggu persetujuan yang bisa dibatalkan.');
         }
         $item->delete();
     }
 
-    public function correctionListData(): array
+    public function correctionListData(Request $request): array
     {
-        return ['title' => 'Attendance Corrections', 'items' => AttendanceCorrectionRequest::query()->with('status')->where('employee_id', $this->employee()->id)->latest('correction_date')->paginate(15)];
+        $query = AttendanceCorrectionRequest::query()->with('status')->where('employee_id', $this->employee()->id);
+        $query->when($request->filled('status_id'), fn ($q) => $q->where('status_id', $request->integer('status_id')))
+            ->when($request->filled('month'), function ($q) use ($request): void {
+                $month = Carbon::parse($request->input('month'));
+                $q->whereYear('correction_date', $month->year)->whereMonth('correction_date', $month->month);
+            });
+
+        return ['title' => 'Koreksi Absensi', 'items' => $query->latest('correction_date')->paginate(10)->withQueryString(), 'statuses' => $this->approvalStatuses()];
     }
 
     public function correctionFormData(): array
     {
-        return ['title' => 'Create Attendance Correction'];
+        return ['title' => 'Buat Koreksi Absensi'];
     }
 
     public function correctionDetailData(int $id): array
     {
-        return ['title' => 'Attendance Correction Detail', 'item' => AttendanceCorrectionRequest::query()->with('status')->where('employee_id', $this->employee()->id)->findOrFail($id)];
+        return ['title' => 'Detail Koreksi Absensi', 'item' => AttendanceCorrectionRequest::query()->with('status')->where('employee_id', $this->employee()->id)->findOrFail($id)];
     }
 
     public function createCorrection(array $payload): void
@@ -142,14 +224,45 @@ class EmployeePortalService
     {
         $item = AttendanceCorrectionRequest::query()->where('employee_id', $this->employee()->id)->findOrFail($id);
         if ($item->status_id !== $this->approvalStatusId('pending')) {
-            throw new RuntimeException('Hanya pending yang bisa dibatalkan.');
+            throw new RuntimeException('Hanya pengajuan yang masih menunggu persetujuan yang bisa dibatalkan.');
         }
         $item->delete();
     }
 
     public function profileData(): array
     {
-        return ['title' => 'My Profile', 'employee' => $this->employee()->load(['user', 'department', 'position', 'workLocation', 'shift'])];
+        $employee = $this->employee()->load(['user.profileImageAttachment', 'department', 'position', 'workLocation', 'shift']);
+
+        return ['title' => 'Profil Saya', 'employee' => $employee, 'profileImageUrl' => app(AttachmentSecurityService::class)->generateTemporaryPreviewUrl($employee->user?->profileImageAttachment)];
+    }
+
+    public function updateProfile(array $payload): void
+    {
+        $employee = $this->employee()->load('user');
+        DB::transaction(function () use ($employee, $payload): void {
+            $employee->update([
+                'full_name' => $payload['full_name'],
+                'phone' => $payload['phone'] ?? null,
+                'gender' => $payload['gender'] ?? null,
+                'updated_by' => auth()->id(),
+            ]);
+
+            $userPayload = [
+                'name' => $payload['full_name'],
+                'username' => $payload['username'],
+                'email' => $payload['email'],
+                'updated_by' => auth()->id(),
+            ];
+
+            if (! empty($payload['password'])) {
+                $userPayload['password'] = Hash::make($payload['password']);
+            }
+            if (! empty($payload['profile_image'])) {
+                $userPayload['profile_image_attachment_id'] = $this->storeProfilePhoto($payload['profile_image']);
+            }
+
+            User::query()->whereKey($employee->user_id)->update($userPayload);
+        });
     }
 
     private function employee(): Employee
@@ -236,6 +349,13 @@ class EmployeePortalService
         return max(0, $start->diffInMinutes(now(), false));
     }
 
+    private function storeProfilePhoto($file): int
+    {
+        $stored = app(AttachmentSecurityService::class)->storeEncryptedProfileImage($file);
+
+        return Attachment::query()->create(['uuid' => (string) Str::uuid(), 'name' => $file->getClientOriginalName(), 'path' => $stored['encrypted_path'], 'type_file' => $this->requiredAttachmentImageTypeId(), 'created_by' => auth()->id()])->id;
+    }
+
     private function storeCameraPhoto(string $photoData, string $prefix): int
     {
         $content = preg_replace('/^data:image\/\w+;base64,/', '', $photoData);
@@ -248,6 +368,11 @@ class EmployeePortalService
     private function logAttendance(Attendance $attendance, string $action, array $payload, int $attachmentId, bool $inside, ?float $distance, Request $request): void
     {
         AttendanceLog::query()->create(['uuid' => (string) Str::uuid(), 'attendance_id' => $attendance->id, 'employee_id' => $attendance->employee_id, 'action_type_id' => $this->requiredActionTypeId($action), 'action_at' => now(), 'latitude' => $payload['latitude'], 'longitude' => $payload['longitude'], 'distance_meter' => $distance, 'gps_accuracy_meter' => $payload['gps_accuracy_meter'] ?? null, 'is_inside_radius' => $inside, 'work_mode_id' => $payload['work_mode_id'] ?? null, 'note' => $payload['note'] ?? null, 'photo_attachment_id' => $attachmentId, 'device_info' => $request->userAgent(), 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(), 'source' => 'web', 'created_by' => auth()->id()]);
+    }
+
+    private function approvalStatuses()
+    {
+        return Reference::query()->whereIn('description', ['pending', 'approved', 'rejected'])->orderBy('description')->get();
     }
 
     private function approvalStatusId(string $description): ?int
