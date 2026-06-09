@@ -1,0 +1,6 @@
+@extends('layouts.admin.admin')
+@section('title', $title)
+@section('content')
+<div class="ka-toolbar"><div><h2 class="ka-page-title">{{ $title }}</h2></div><a href="{{ route('employee.attendance.history') }}" class="btn btn-light">Back</a></div>
+<div class="card custom-card ka-card"><div class="card-body"><div class="row g-3"><div class="col-md-3"><b>Date</b><div>{{ $item->attendance_date?->format('Y-m-d') }}</div></div><div class="col-md-3"><b>Check-in</b><div>{{ $item->check_in_at?->format('Y-m-d H:i') ?? '-' }}</div></div><div class="col-md-3"><b>Check-out</b><div>{{ $item->check_out_at?->format('Y-m-d H:i') ?? '-' }}</div></div><div class="col-md-3"><b>Status</b><div>{{ $item->status?->description ?? '-' }}</div></div><div class="col-md-6"><b>Check-in GPS</b><div>{{ $item->check_in_latitude ?? '-' }}, {{ $item->check_in_longitude ?? '-' }}</div></div><div class="col-md-6"><b>Check-out GPS</b><div>{{ $item->check_out_latitude ?? '-' }}, {{ $item->check_out_longitude ?? '-' }}</div></div><div class="col-md-6"><b>Check-in Note</b><div>{{ $item->check_in_note ?? '-' }}</div></div><div class="col-md-6"><b>Check-out Note</b><div>{{ $item->check_out_note ?? '-' }}</div></div></div></div></div>
+@endsection
