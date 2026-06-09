@@ -238,14 +238,27 @@ class HrdService
 
     private function syncLeaveAttendances(LeaveRequest $leaveRequest): void
     {
+        $leaveRequest->loadMissing(['employee', 'leaveType']);
         $status = match ($leaveRequest->leaveType?->description) {
             'sick_leave' => 'sick',
             'permission' => 'permission',
             default => 'leave',
         };
+        if ($leaveRequest->employee?->shift_id === null || $leaveRequest->employee?->work_location_id === null) {
+            throw new \RuntimeException('Shift dan lokasi kerja karyawan wajib diisi sebelum pengajuan disetujui.');
+        }
 
         foreach (CarbonPeriod::create($leaveRequest->start_date, $leaveRequest->end_date) as $date) {
-            Attendance::query()->updateOrCreate(['employee_id' => $leaveRequest->employee_id, 'attendance_date' => $date->format('Y-m-d')], ['uuid' => (string) Str::uuid(), 'status_id' => $this->attendanceStatusId($status), 'updated_by' => auth()->id()]);
+            $attendance = Attendance::query()->firstOrNew(['employee_id' => $leaveRequest->employee_id, 'attendance_date' => $date->format('Y-m-d')]);
+            if (! $attendance->exists) {
+                $attendance->uuid = (string) Str::uuid();
+                $attendance->shift_id = $leaveRequest->employee->shift_id;
+                $attendance->work_location_id = $leaveRequest->employee->work_location_id;
+                $attendance->created_by = auth()->id();
+            }
+            $attendance->status_id = $this->attendanceStatusId($status);
+            $attendance->updated_by = auth()->id();
+            $attendance->save();
         }
     }
 
