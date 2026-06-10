@@ -12,12 +12,12 @@ class AttendanceReportExportController extends Controller
 {
     public function daily(Request $request, HrdService $hrdService): StreamedResponse
     {
-        return $this->csv('daily-attendance.csv', ['Date', 'Employee', 'Department', 'Check In', 'Check Out', 'Late', 'Status'], $hrdService->dailyExportRows($request));
+        return $this->csv('daily-attendance.csv', ['Tanggal', 'Employee Number', 'Nama Karyawan', 'Department', 'Position', 'Work Location', 'Shift', 'Check In', 'Check Out', 'Work Mode Check In', 'Work Mode Check Out', 'Radius Check In', 'Radius Check Out', 'Late Minutes', 'Early Leave Minutes', 'Total Work Minutes', 'Attendance Status', 'Approval/Review Status', 'Check In Note', 'Check Out Note'], $hrdService->dailyExportRows($request));
     }
 
     public function monthly(Request $request, HrdService $hrdService): StreamedResponse
     {
-        return $this->csv('monthly-attendance.csv', ['Employee', 'Department', 'Present', 'Late', 'Sick', 'Leave', 'Permission', 'Incomplete', 'Outside Radius', 'Work Minutes'], $hrdService->monthlyExportRows($request));
+        return $this->csv('monthly-attendance.csv', ['Year', 'Month', 'Employee Number', 'Nama Karyawan', 'Department', 'Position', 'Total Work Days', 'Total Present', 'Total Late', 'Total Absent', 'Total Sick', 'Total Leave', 'Total Permission', 'Total Incomplete', 'Total Outside Radius', 'Total Work Minutes', 'Total Late Minutes', 'Total Early Leave Minutes'], $hrdService->monthlyExportRows($request));
     }
 
     private function csv(string $filename, array $headers, array $rows): StreamedResponse

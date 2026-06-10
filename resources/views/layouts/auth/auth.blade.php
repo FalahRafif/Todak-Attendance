@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Login — KlikAbsen')</title>
+    <title>@yield('title', 'Login — Todak Attendace')</title>
     <style>
         :root {
             --primary: #0f4c81;

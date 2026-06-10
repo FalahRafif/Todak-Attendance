@@ -62,4 +62,9 @@ class AttendanceCorrectionRequest extends Model
     {
         return $this->belongsTo(Reference::class, 'status_id');
     }
+
+    public function attachment(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'attachment_id');
+    }
 }

@@ -2,11 +2,15 @@
 
 namespace App\Services\Hr;
 
+use App\Models\Attendance;
+use App\Models\AttendanceCorrectionRequest;
+use App\Models\LeaveRequest;
 use App\Services\AttachmentSecurityService;
 use App\Repositories\Contracts\AttachmentRepositoryInterface;
 use App\Repositories\Contracts\DepartmentRepositoryInterface;
 use App\Repositories\Contracts\EmployeeRepositoryInterface;
 use App\Repositories\Contracts\EmployeeWorkLocationRepositoryInterface;
+use App\Repositories\Contracts\LeaveBalanceRepositoryInterface;
 use App\Repositories\Contracts\PositionRepositoryInterface;
 use App\Enums\RoleName;
 use App\Repositories\Contracts\ReferenceRepositoryInterface;
@@ -32,6 +36,7 @@ class EmployeeService
         private UserRepositoryInterface $userRepository,
         private RoleRepositoryInterface $roleRepository,
         private AttachmentRepositoryInterface $attachmentRepository,
+        private LeaveBalanceRepositoryInterface $leaveBalanceRepository,
         private AttachmentSecurityService $attachmentSecurityService
     ) {
     }
@@ -56,6 +61,24 @@ class EmployeeService
         ]);
     }
 
+    public function detailData(int $id): array
+    {
+        $user = $this->userRepository->findOrFail($id, ['*'], ['role', 'profileImageAttachment', 'employee.department', 'employee.position', 'employee.workLocation', 'employee.shift']);
+        $employee = $user->employee;
+
+        return [
+            'title' => 'Detail Employee',
+            'user' => $user,
+            'employee' => $employee,
+            'profileImageUrl' => $this->attachmentSecurityService->generateTemporaryPreviewUrl($user->profileImageAttachment),
+            'leaveBalances' => $employee === null ? collect() : $this->leaveBalanceRepository->query()->with('leaveType')->where('employee_id', $employee->id)->latest('year')->get(),
+            'attendanceSummary' => $employee === null ? [] : ['present' => Attendance::query()->where('employee_id', $employee->id)->whereMonth('attendance_date', now()->month)->whereYear('attendance_date', now()->year)->whereNotNull('check_in_at')->count(), 'late' => Attendance::query()->where('employee_id', $employee->id)->whereMonth('attendance_date', now()->month)->whereYear('attendance_date', now()->year)->where('late_minutes', '>', 0)->count(), 'outside' => Attendance::query()->where('employee_id', $employee->id)->whereMonth('attendance_date', now()->month)->whereYear('attendance_date', now()->year)->where(function ($query): void { $query->where('check_in_is_inside_radius', false)->orWhere('check_out_is_inside_radius', false); })->count()],
+            'recentAttendances' => $employee === null ? collect() : Attendance::query()->with('status')->where('employee_id', $employee->id)->latest('attendance_date')->limit(10)->get(),
+            'recentLeaves' => $employee === null ? collect() : LeaveRequest::query()->with(['leaveType', 'status'])->where('employee_id', $employee->id)->latest('start_date')->limit(10)->get(),
+            'recentCorrections' => $employee === null ? collect() : AttendanceCorrectionRequest::query()->with('status')->where('employee_id', $employee->id)->latest('correction_date')->limit(10)->get(),
+        ];
+    }
+
     public function createEmployeeWithUser(array $payload)
     {
         return DB::transaction(function () use ($payload) {
@@ -66,7 +89,10 @@ class EmployeeService
                 return $user;
             }
 
-            return $this->employeeRepository->create(array_merge($this->normalizeBooleans($this->employeePayload($payload), ['is_active']), ['uuid' => (string) Str::uuid(), 'user_id' => $user->id]));
+            $employee = $this->employeeRepository->create(array_merge($this->normalizeBooleans($this->employeePayload($payload), ['is_active']), ['uuid' => (string) Str::uuid(), 'user_id' => $user->id]));
+            $this->ensureDefaultLeaveBalance($employee);
+
+            return $employee;
         });
     }
 
@@ -87,7 +113,10 @@ class EmployeeService
 
             $employeePayload = $this->normalizeBooleans($this->employeePayload($payload), ['is_active']);
             if ($employee === null) {
-                return $this->employeeRepository->create(array_merge($employeePayload, ['uuid' => (string) Str::uuid(), 'user_id' => $id]));
+                $employee = $this->employeeRepository->create(array_merge($employeePayload, ['uuid' => (string) Str::uuid(), 'user_id' => $id]));
+                $this->ensureDefaultLeaveBalance($employee);
+
+                return $employee;
             }
 
             return $this->employeeRepository->update($employee, $employeePayload);
@@ -168,5 +197,33 @@ class EmployeeService
         }
 
         return $payload;
+    }
+
+    private function ensureDefaultLeaveBalance($employee): void
+    {
+        $annualLeaveType = $this->referenceRepository->query()->where('description', 'annual_leave')->first();
+        if ($annualLeaveType === null || $employee === null) {
+            return;
+        }
+        $year = now()->year;
+        $exists = $this->leaveBalanceRepository->query()
+            ->where('employee_id', $employee->id)
+            ->where('leave_type_id', $annualLeaveType->id)
+            ->where('year', $year)
+            ->exists();
+        if ($exists) {
+            return;
+        }
+        $quota = (int) (\App\Models\Setting::query()->where('group_id', 'attendance')->where('code', 'DEFAULT_ANNUAL_LEAVE_QUOTA')->value('value') ?? 12);
+        $this->leaveBalanceRepository->create([
+            'uuid' => (string) Str::uuid(),
+            'employee_id' => $employee->id,
+            'leave_type_id' => $annualLeaveType->id,
+            'year' => $year,
+            'total_quota' => $quota,
+            'used_quota' => 0,
+            'remaining_quota' => $quota,
+            'created_by' => auth()->id(),
+        ]);
     }
 }
