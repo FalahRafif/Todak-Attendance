@@ -23,7 +23,7 @@ class LeaveRequestController extends Controller
 
     public function store(Request $request, EmployeePortalService $employeePortalService): RedirectResponse
     {
-        $payload = $request->validate(['leave_type_id' => ['required', 'integer', 'exists:references,id'], 'start_date' => ['required', 'date'], 'end_date' => ['required', 'date', 'after_or_equal:start_date'], 'reason' => ['required', 'string']]);
+        $payload = $request->validate(['leave_type_id' => ['required', 'integer', 'exists:references,id'], 'start_date' => ['required', 'date'], 'end_date' => ['required', 'date', 'after_or_equal:start_date'], 'reason' => ['required', 'string'], 'attachment' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf,doc,docx', 'max:5120']]);
         try {
             $employeePortalService->createLeave($payload);
         } catch (RuntimeException $exception) {

@@ -40,6 +40,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'early_leave_minutes',
     'status_id',
     'is_need_approval',
+    'outside_radius_review_status_id',
+    'outside_radius_reviewed_by',
+    'outside_radius_reviewed_at',
+    'outside_radius_review_note',
     'approved_by',
     'approved_at',
     'approval_note',
@@ -67,6 +71,7 @@ class Attendance extends Model
             'late_minutes' => 'integer',
             'early_leave_minutes' => 'integer',
             'is_need_approval' => 'boolean',
+            'outside_radius_reviewed_at' => 'datetime',
             'approved_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
@@ -103,6 +108,16 @@ class Attendance extends Model
     public function checkOutPhoto(): BelongsTo
     {
         return $this->belongsTo(Attachment::class, 'check_out_photo_attachment_id');
+    }
+
+    public function checkInWorkMode(): BelongsTo
+    {
+        return $this->belongsTo(Reference::class, 'check_in_work_mode_id');
+    }
+
+    public function checkOutWorkMode(): BelongsTo
+    {
+        return $this->belongsTo(Reference::class, 'check_out_work_mode_id');
     }
 
     public function logs(): HasMany

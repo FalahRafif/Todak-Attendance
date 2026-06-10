@@ -2,6 +2,7 @@
 
 namespace App\Services\Hrd;
 
+use App\Models\Approval;
 use App\Models\Attendance;
 use App\Models\AttendanceCorrectionRequest;
 use App\Models\AttendanceLog;
@@ -13,10 +14,12 @@ use App\Models\Holiday;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestDetail;
+use App\Models\Position;
 use App\Models\Reference;
 use App\Models\Setting;
 use App\Models\Shift;
 use App\Models\WorkLocation;
+use App\Services\ActivityLogService;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -55,7 +58,10 @@ class HrdService
             'employees' => Employee::query()->where('is_active', true)->orderBy('full_name')->get(),
             'departments' => Department::query()->orderBy('name')->get(),
             'workLocations' => WorkLocation::query()->orderBy('name')->get(),
+            'positions' => Position::query()->orderBy('name')->get(),
             'shifts' => Shift::query()->orderBy('name')->get(),
+            'statuses' => Reference::query()->whereIn('description', ['present', 'late', 'leave', 'sick', 'permission'])->orderBy('description')->get(),
+            'workModes' => Reference::query()->where('group_id', 'WORK_MODE')->orderBy('description')->get(),
         ];
     }
 
@@ -122,12 +128,20 @@ class HrdService
 
     public function approveAttendance(int $id, ?string $note): void
     {
-        Attendance::query()->findOrFail($id)->update(['is_need_approval' => false, 'approved_by' => auth()->id(), 'approved_at' => now(), 'approval_note' => $note, 'updated_by' => auth()->id()]);
+        $attendance = Attendance::query()->with('employee')->findOrFail($id);
+        $approvedStatusId = $this->approvalStatusId('approved');
+        $attendance->update(['is_need_approval' => false, 'outside_radius_review_status_id' => $approvedStatusId, 'outside_radius_reviewed_by' => auth()->id(), 'outside_radius_reviewed_at' => now(), 'outside_radius_review_note' => $note, 'approved_by' => auth()->id(), 'approved_at' => now(), 'approval_note' => $note, 'updated_by' => auth()->id()]);
+        $this->recordApproval('outside_radius_attendance', $attendance->id, $attendance->employee?->user_id, (int) $approvedStatusId, $note);
+        app(ActivityLogService::class)->log('attendance', 'approve_outside_radius', 'HRD approve outside radius attendance', null, ['attendance_id' => $attendance->id, 'status_id' => $approvedStatusId]);
     }
 
     public function rejectAttendance(int $id, string $note): void
     {
-        $this->approveAttendance($id, $note);
+        $attendance = Attendance::query()->with('employee')->findOrFail($id);
+        $rejectedStatusId = $this->approvalStatusId('rejected');
+        $attendance->update(['is_need_approval' => false, 'outside_radius_review_status_id' => $rejectedStatusId, 'outside_radius_reviewed_by' => auth()->id(), 'outside_radius_reviewed_at' => now(), 'outside_radius_review_note' => $note, 'approved_by' => auth()->id(), 'approved_at' => now(), 'approval_note' => $note, 'updated_by' => auth()->id()]);
+        $this->recordApproval('outside_radius_attendance', $attendance->id, $attendance->employee?->user_id, (int) $rejectedStatusId, $note);
+        app(ActivityLogService::class)->log('attendance', 'reject_outside_radius', 'HRD reject outside radius attendance', null, ['attendance_id' => $attendance->id, 'status_id' => $rejectedStatusId]);
     }
 
     public function leaveRequestListData(Request $request): array
@@ -140,18 +154,20 @@ class HrdService
             ->when($request->filled('start_date_to'), fn ($q) => $q->whereDate('start_date', '<=', $request->input('start_date_to')))
             ->when($request->filled('keyword'), fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->where('full_name', 'like', '%'.$request->input('keyword').'%')));
 
-        return ['title' => 'Pengajuan Izin/Cuti', 'items' => $query->latest('start_date')->paginate(15)->withQueryString(), 'statuses' => Reference::query()->whereIn('description', ['pending', 'approved', 'rejected', 'cancelled'])->orderBy('description')->get(), 'leaveTypes' => Reference::query()->whereIn('description', ['annual_leave', 'sick_leave', 'permission'])->get(), 'departments' => Department::query()->orderBy('name')->get()];
+        return ['title' => 'Pengajuan Izin/Cuti', 'items' => $query->latest('created_at')->paginate(15)->withQueryString(), 'statuses' => Reference::query()->whereIn('description', ['pending', 'approved', 'rejected', 'cancelled'])->orderBy('description')->get(), 'leaveTypes' => Reference::query()->whereIn('description', ['annual_leave', 'sick_leave', 'permission'])->get(), 'departments' => Department::query()->orderBy('name')->get()];
     }
 
     public function leaveRequestDetailData(int $id): array
     {
-        return ['title' => 'Detail Pengajuan Izin/Cuti', 'item' => LeaveRequest::query()->whereHas('employee')->with(['employee.department', 'leaveType', 'status', 'details'])->findOrFail($id)];
+        $item = LeaveRequest::query()->whereHas('employee')->with(['employee.department', 'leaveType', 'status', 'details', 'attachment'])->findOrFail($id);
+
+        return ['title' => 'Detail Pengajuan Izin/Cuti', 'item' => $item, 'attachmentUrl' => app(\App\Services\AttachmentSecurityService::class)->generateTemporaryPreviewUrl($item->attachment)];
     }
 
     public function approveLeaveRequest(int $id, ?string $note): void
     {
         DB::transaction(function () use ($id, $note): void {
-            $leaveRequest = LeaveRequest::query()->whereHas('employee')->with('leaveType')->lockForUpdate()->findOrFail($id);
+            $leaveRequest = LeaveRequest::query()->whereHas('employee')->with(['leaveType', 'employee'])->lockForUpdate()->findOrFail($id);
             if ($leaveRequest->status_id !== $this->approvalStatusId('pending')) {
                 throw new \RuntimeException('Hanya pengajuan pending yang bisa disetujui.');
             }
@@ -159,18 +175,24 @@ class HrdService
             if ($leaveRequest->leaveType?->description === 'annual_leave') {
                 $this->ensureAndReduceLeaveBalanceLocked($leaveRequest);
             }
-            $leaveRequest->update(['status_id' => $this->approvalStatusId('approved'), 'approved_by' => auth()->id(), 'approved_at' => now(), 'approval_note' => $note, 'updated_by' => auth()->id()]);
+            $approvedStatusId = $this->approvalStatusId('approved');
+            $leaveRequest->update(['status_id' => $approvedStatusId, 'approved_by' => auth()->id(), 'approved_at' => now(), 'approval_note' => $note, 'updated_by' => auth()->id()]);
+            $this->recordApproval('leave_request', $leaveRequest->id, $leaveRequest->employee?->user_id, (int) $approvedStatusId, $note);
+            app(ActivityLogService::class)->log('leave_request', 'approve', 'HRD approve leave request', null, ['leave_request_id' => $leaveRequest->id, 'status_id' => $approvedStatusId]);
             $this->syncLeaveAttendances($leaveRequest);
         });
     }
 
     public function rejectLeaveRequest(int $id, string $reason): void
     {
-        $leaveRequest = LeaveRequest::query()->whereHas('employee')->findOrFail($id);
+        $leaveRequest = LeaveRequest::query()->whereHas('employee')->with('employee')->findOrFail($id);
         if ($leaveRequest->status_id !== $this->approvalStatusId('pending')) {
             throw new \RuntimeException('Hanya pengajuan pending yang bisa ditolak.');
         }
-        $leaveRequest->update(['status_id' => $this->approvalStatusId('rejected'), 'approved_by' => auth()->id(), 'approved_at' => now(), 'rejected_reason' => $reason, 'updated_by' => auth()->id()]);
+        $rejectedStatusId = $this->approvalStatusId('rejected');
+        $leaveRequest->update(['status_id' => $rejectedStatusId, 'approved_by' => auth()->id(), 'approved_at' => now(), 'rejected_reason' => $reason, 'updated_by' => auth()->id()]);
+        $this->recordApproval('leave_request', $leaveRequest->id, $leaveRequest->employee?->user_id, (int) $rejectedStatusId, $reason);
+        app(ActivityLogService::class)->log('leave_request', 'reject', 'HRD reject leave request', null, ['leave_request_id' => $leaveRequest->id, 'status_id' => $rejectedStatusId]);
     }
 
     public function correctionListData(Request $request): array
@@ -182,12 +204,14 @@ class HrdService
             ->when($request->filled('date_to'), fn ($q) => $q->whereDate('correction_date', '<=', $request->input('date_to')))
             ->when($request->filled('keyword'), fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->where('full_name', 'like', '%'.$request->input('keyword').'%')));
 
-        return ['title' => 'Koreksi Absensi', 'items' => $query->latest('correction_date')->paginate(15)->withQueryString(), 'statuses' => Reference::query()->whereIn('description', ['pending', 'approved', 'rejected', 'cancelled'])->orderBy('description')->get(), 'departments' => Department::query()->orderBy('name')->get()];
+        return ['title' => 'Koreksi Absensi', 'items' => $query->latest('created_at')->paginate(15)->withQueryString(), 'statuses' => Reference::query()->whereIn('description', ['pending', 'approved', 'rejected', 'cancelled'])->orderBy('description')->get(), 'departments' => Department::query()->orderBy('name')->get()];
     }
 
     public function correctionDetailData(int $id): array
     {
-        return ['title' => 'Detail Koreksi Absensi', 'item' => AttendanceCorrectionRequest::query()->whereHas('employee')->with(['employee.department', 'attendance', 'status'])->findOrFail($id)];
+        $item = AttendanceCorrectionRequest::query()->whereHas('employee')->with(['employee.department', 'attendance', 'status', 'attachment'])->findOrFail($id);
+
+        return ['title' => 'Detail Koreksi Absensi', 'item' => $item, 'attachmentUrl' => app(\App\Services\AttachmentSecurityService::class)->generateTemporaryPreviewUrl($item->attachment)];
     }
 
     public function approveCorrection(int $id, ?string $note): void
@@ -203,22 +227,50 @@ class HrdService
 
             $attendance->update(array_merge(['check_in_at' => $checkInAt, 'check_out_at' => $checkOutAt, 'status_id' => $this->attendanceStatusId('present'), 'updated_by' => auth()->id()], $this->correctedAttendanceMetrics($attendance->refresh(), $checkInAt, $checkOutAt)));
             AttendanceLog::query()->create(['uuid' => (string) Str::uuid(), 'attendance_id' => $attendance->id, 'employee_id' => $correction->employee_id, 'action_type_id' => $this->attendanceActionTypeId('update_by_hrd'), 'action_at' => now(), 'note' => $note ?? $correction->reason, 'source' => 'hrd', 'created_by' => auth()->id()]);
-            $correction->update(['attendance_id' => $attendance->id, 'status_id' => $this->approvalStatusId('approved'), 'approved_by' => auth()->id(), 'approved_at' => now(), 'approval_note' => $note, 'updated_by' => auth()->id()]);
+            $approvedStatusId = $this->approvalStatusId('approved');
+            $correction->update(['attendance_id' => $attendance->id, 'status_id' => $approvedStatusId, 'approved_by' => auth()->id(), 'approved_at' => now(), 'approval_note' => $note, 'updated_by' => auth()->id()]);
+            $this->recordApproval('attendance_correction', $correction->id, $correction->employee?->user_id, (int) $approvedStatusId, $note);
+            app(ActivityLogService::class)->log('attendance_correction', 'approve', 'HRD approve attendance correction', null, ['attendance_correction_request_id' => $correction->id, 'attendance_id' => $attendance->id, 'status_id' => $approvedStatusId]);
         });
     }
 
     public function rejectCorrection(int $id, string $reason): void
     {
-        $correction = AttendanceCorrectionRequest::query()->whereHas('employee')->findOrFail($id);
+        $correction = AttendanceCorrectionRequest::query()->whereHas('employee')->with('employee')->findOrFail($id);
         if ($correction->status_id !== $this->approvalStatusId('pending')) {
             throw new \RuntimeException('Hanya koreksi pending yang bisa ditolak.');
         }
-        $correction->update(['status_id' => $this->approvalStatusId('rejected'), 'approved_by' => auth()->id(), 'approved_at' => now(), 'rejected_reason' => $reason, 'updated_by' => auth()->id()]);
+        $rejectedStatusId = $this->approvalStatusId('rejected');
+        $correction->update(['status_id' => $rejectedStatusId, 'approved_by' => auth()->id(), 'approved_at' => now(), 'rejected_reason' => $reason, 'updated_by' => auth()->id()]);
+        $this->recordApproval('attendance_correction', $correction->id, $correction->employee?->user_id, (int) $rejectedStatusId, $reason);
+        app(ActivityLogService::class)->log('attendance_correction', 'reject', 'HRD reject attendance correction', null, ['attendance_correction_request_id' => $correction->id, 'status_id' => $rejectedStatusId]);
     }
 
-    public function scheduleListData(): array
+    public function scheduleListData(Request $request): array
     {
-        return ['title' => 'Jadwal Karyawan', 'items' => EmployeeSchedule::query()->whereHas('employee')->with(['employee.department', 'shift'])->latest('schedule_date')->paginate(15)];
+        $query = EmployeeSchedule::query()->whereHas('employee')->with(['employee.department', 'shift']);
+        $query->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))
+            ->when($request->filled('department_id'), fn ($q) => $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('department_id', $request->integer('department_id'))))
+            ->when($request->filled('month'), function ($q) use ($request): void {
+                $month = Carbon::parse($request->input('month'));
+                $q->whereYear('schedule_date', $month->year)->whereMonth('schedule_date', $month->month);
+            });
+
+        return ['title' => 'Jadwal Karyawan', 'items' => $query->latest('schedule_date')->paginate(15)->withQueryString(), 'employees' => Employee::query()->where('is_active', true)->orderBy('full_name')->get(), 'departments' => Department::query()->orderBy('name')->get(), 'shifts' => Shift::query()->orderBy('name')->get()];
+    }
+
+    public function saveEmployeeSchedule(array $payload): void
+    {
+        $schedule = EmployeeSchedule::query()->updateOrCreate(['employee_id' => $payload['employee_id'], 'schedule_date' => $payload['schedule_date']], ['shift_id' => ($payload['is_day_off'] ?? false) ? null : ($payload['shift_id'] ?? null), 'is_day_off' => (bool) ($payload['is_day_off'] ?? false), 'note' => $payload['note'] ?? null, 'updated_by' => auth()->id(), 'created_by' => auth()->id()]);
+        app(ActivityLogService::class)->log('employee_schedule', 'save', 'HRD save employee schedule', null, ['employee_schedule_id' => $schedule->id, 'employee_id' => $schedule->employee_id, 'schedule_date' => $schedule->schedule_date?->format('Y-m-d')]);
+    }
+
+    public function deleteEmployeeSchedule(int $id): void
+    {
+        $schedule = EmployeeSchedule::query()->findOrFail($id);
+        $old = $schedule->only(['employee_id', 'shift_id', 'schedule_date', 'is_day_off', 'note']);
+        $schedule->delete();
+        app(ActivityLogService::class)->log('employee_schedule', 'delete', 'HRD delete employee schedule', $old, ['employee_schedule_id' => $id]);
     }
 
     public function leaveBalanceListData(Request $request): array
@@ -340,7 +392,11 @@ class HrdService
         $year = (int) $request->input('year', now()->year);
         $month = (int) $request->input('month', now()->month);
 
-        return ['title' => 'Laporan Absensi Bulanan', 'items' => AttendanceMonthlySummary::query()->whereHas('employee')->with('employee.department')->where('year', $year)->where('month', $month)->paginate(15)->withQueryString(), 'year' => $year, 'month' => $month];
+        $query = AttendanceMonthlySummary::query()->whereHas('employee')->with(['employee.department', 'employee.position'])->where('year', $year)->where('month', $month);
+        $query->when($request->filled('department_id'), fn ($q) => $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('department_id', $request->integer('department_id'))))
+            ->when($request->filled('keyword'), fn ($q) => $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('full_name', 'like', '%'.$request->input('keyword').'%')->orWhere('employee_number', 'like', '%'.$request->input('keyword').'%')));
+
+        return ['title' => 'Laporan Absensi Bulanan', 'items' => $query->paginate(15)->withQueryString(), 'year' => $year, 'month' => $month, 'departments' => Department::query()->orderBy('name')->get()];
     }
 
     public function generateMonthlyReport(array $payload): void
@@ -377,7 +433,7 @@ class HrdService
 
     public function dailyExportRows(Request $request): array
     {
-        return $this->attendancePageData($request, 'Laporan Absensi Harian', null, false)['items']->map(fn (Attendance $item): array => [$item->attendance_date?->format('Y-m-d'), $item->employee?->full_name, $item->employee?->department?->name, $item->check_in_at?->format('H:i'), $item->check_out_at?->format('H:i'), $item->late_minutes, $item->status?->description])->all();
+        return $this->attendancePageData($request, 'Laporan Absensi Harian', null, false)['items']->map(fn (Attendance $item): array => [$item->attendance_date?->format('Y-m-d'), $item->employee?->employee_number, $item->employee?->full_name, $item->employee?->department?->name, $item->employee?->position?->name, $item->workLocation?->name, $item->shift?->name, $item->check_in_at?->format('H:i'), $item->check_out_at?->format('H:i'), friendly_label($item->checkInWorkMode?->description), friendly_label($item->checkOutWorkMode?->description), $item->check_in_is_inside_radius === null ? '-' : ($item->check_in_is_inside_radius ? 'Inside' : 'Outside'), $item->check_out_is_inside_radius === null ? '-' : ($item->check_out_is_inside_radius ? 'Inside' : 'Outside'), $item->late_minutes, $item->early_leave_minutes, $item->total_work_minutes, friendly_label($item->status?->description), $item->is_need_approval ? 'Pending Review' : ($item->approved_at ? 'Reviewed' : '-'), $item->check_in_note, $item->check_out_note])->all();
     }
 
     public function monthlyExportRows(Request $request): array
@@ -385,12 +441,16 @@ class HrdService
         $year = (int) $request->input('year', now()->year);
         $month = (int) $request->input('month', now()->month);
 
-        return AttendanceMonthlySummary::query()->whereHas('employee')->with('employee.department')->where('year', $year)->where('month', $month)->get()->map(fn (AttendanceMonthlySummary $item): array => [$item->employee?->full_name, $item->employee?->department?->name, $item->total_present, $item->total_late, $item->total_sick, $item->total_leave, $item->total_permission, $item->total_incomplete, $item->total_outside_radius, $item->total_work_minutes])->all();
+        $query = AttendanceMonthlySummary::query()->whereHas('employee')->with(['employee.department', 'employee.position'])->where('year', $year)->where('month', $month);
+        $query->when($request->filled('department_id'), fn ($q) => $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('department_id', $request->integer('department_id'))))
+            ->when($request->filled('keyword'), fn ($q) => $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('full_name', 'like', '%'.$request->input('keyword').'%')->orWhere('employee_number', 'like', '%'.$request->input('keyword').'%')));
+
+        return $query->get()->map(fn (AttendanceMonthlySummary $item): array => [$item->year, $item->month, $item->employee?->employee_number, $item->employee?->full_name, $item->employee?->department?->name, $item->employee?->position?->name, $item->total_work_days, $item->total_present, $item->total_late, $item->total_absent, $item->total_sick, $item->total_leave, $item->total_permission, $item->total_incomplete, $item->total_outside_radius, $item->total_work_minutes, $item->total_late_minutes, $item->total_early_leave_minutes])->all();
     }
 
     public function attendanceBaseQuery()
     {
-        return Attendance::query()->whereHas('employee')->with(['employee.department', 'employee.position', 'shift', 'workLocation', 'status']);
+        return Attendance::query()->whereHas('employee')->with(['employee.department', 'employee.position', 'shift', 'workLocation', 'status', 'checkInWorkMode', 'checkOutWorkMode']);
     }
 
     public function outsideRadiusQuery()
@@ -460,7 +520,33 @@ class HrdService
 
     private function applyAttendanceFilters($query, Request $request): void
     {
-        $query->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))->when($request->filled('department_id'), fn ($q) => $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('department_id', $request->integer('department_id'))))->when($request->filled('work_location_id'), fn ($q) => $q->where('work_location_id', $request->integer('work_location_id')))->when($request->filled('shift_id'), fn ($q) => $q->where('shift_id', $request->integer('shift_id')))->when($request->filled('status_id'), fn ($q) => $q->where('status_id', $request->integer('status_id')));
+        $query->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))
+            ->when($request->filled('department_id'), fn ($q) => $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('department_id', $request->integer('department_id'))))
+            ->when($request->filled('position_id'), fn ($q) => $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('position_id', $request->integer('position_id'))))
+            ->when($request->filled('keyword'), fn ($q) => $q->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('full_name', 'like', '%'.$request->input('keyword').'%')->orWhere('employee_number', 'like', '%'.$request->input('keyword').'%')))
+            ->when($request->filled('work_location_id'), fn ($q) => $q->where('work_location_id', $request->integer('work_location_id')))
+            ->when($request->filled('shift_id'), fn ($q) => $q->where('shift_id', $request->integer('shift_id')))
+            ->when($request->filled('status_id'), fn ($q) => $q->where('status_id', $request->integer('status_id')))
+            ->when($request->filled('work_mode_id'), fn ($q) => $q->where(function ($workModeQuery) use ($request): void {
+                $workModeQuery->where('check_in_work_mode_id', $request->integer('work_mode_id'))->orWhere('check_out_work_mode_id', $request->integer('work_mode_id'));
+            }))
+            ->when($request->filled('radius_status'), fn ($q) => $q->where(function ($radiusQuery) use ($request): void {
+                if ($request->input('radius_status') === 'inside') {
+                    $radiusQuery->where(function ($insideQuery): void {
+                        $insideQuery->where('check_in_is_inside_radius', true)->orWhereNull('check_in_is_inside_radius');
+                    })->where(function ($insideQuery): void {
+                        $insideQuery->where('check_out_is_inside_radius', true)->orWhereNull('check_out_is_inside_radius');
+                    });
+                }
+                if ($request->input('radius_status') === 'outside') {
+                    $radiusQuery->where('check_in_is_inside_radius', false)->orWhere('check_out_is_inside_radius', false);
+                }
+            }))
+            ->when($request->filled('review_status'), fn ($q) => match ($request->input('review_status')) {
+                'pending' => $q->where('is_need_approval', true),
+                'reviewed' => $q->where('is_need_approval', false)->whereNotNull('approved_at'),
+                default => $q,
+            });
     }
 
     private function filterDate(Request $request): Carbon
@@ -552,6 +638,11 @@ class HrdService
     private function annualLeaveQuota(): int
     {
         return (int) (Setting::query()->where('group_id', 'attendance')->where('code', 'DEFAULT_ANNUAL_LEAVE_QUOTA')->value('value') ?? 12);
+    }
+
+    private function recordApproval(string $type, int $id, ?int $requestedBy, int $statusId, ?string $note): void
+    {
+        Approval::query()->create(['uuid' => (string) Str::uuid(), 'approvable_type' => $type, 'approvable_id' => $id, 'requested_by' => $requestedBy, 'approved_by' => auth()->id(), 'status_id' => $statusId, 'approval_level' => 1, 'note' => $note, 'approved_at' => now(), 'created_by' => auth()->id()]);
     }
 
     private function countAttendanceStatus($attendances, string $status): int

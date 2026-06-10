@@ -2,6 +2,9 @@
 
 namespace App\Services\Hr;
 
+use App\Models\Attendance;
+use App\Models\AttendanceCorrectionRequest;
+use App\Models\LeaveRequest;
 use App\Services\AttachmentSecurityService;
 use App\Repositories\Contracts\AttachmentRepositoryInterface;
 use App\Repositories\Contracts\DepartmentRepositoryInterface;
@@ -56,6 +59,24 @@ class EmployeeService
             'employee' => $user?->employee,
             'profileImageUrl' => $this->attachmentSecurityService->generateTemporaryPreviewUrl($user?->profileImageAttachment),
         ]);
+    }
+
+    public function detailData(int $id): array
+    {
+        $user = $this->userRepository->findOrFail($id, ['*'], ['role', 'profileImageAttachment', 'employee.department', 'employee.position', 'employee.workLocation', 'employee.shift']);
+        $employee = $user->employee;
+
+        return [
+            'title' => 'Detail Employee',
+            'user' => $user,
+            'employee' => $employee,
+            'profileImageUrl' => $this->attachmentSecurityService->generateTemporaryPreviewUrl($user->profileImageAttachment),
+            'leaveBalances' => $employee === null ? collect() : $this->leaveBalanceRepository->query()->with('leaveType')->where('employee_id', $employee->id)->latest('year')->get(),
+            'attendanceSummary' => $employee === null ? [] : ['present' => Attendance::query()->where('employee_id', $employee->id)->whereMonth('attendance_date', now()->month)->whereYear('attendance_date', now()->year)->whereNotNull('check_in_at')->count(), 'late' => Attendance::query()->where('employee_id', $employee->id)->whereMonth('attendance_date', now()->month)->whereYear('attendance_date', now()->year)->where('late_minutes', '>', 0)->count(), 'outside' => Attendance::query()->where('employee_id', $employee->id)->whereMonth('attendance_date', now()->month)->whereYear('attendance_date', now()->year)->where(function ($query): void { $query->where('check_in_is_inside_radius', false)->orWhere('check_out_is_inside_radius', false); })->count()],
+            'recentAttendances' => $employee === null ? collect() : Attendance::query()->with('status')->where('employee_id', $employee->id)->latest('attendance_date')->limit(10)->get(),
+            'recentLeaves' => $employee === null ? collect() : LeaveRequest::query()->with(['leaveType', 'status'])->where('employee_id', $employee->id)->latest('start_date')->limit(10)->get(),
+            'recentCorrections' => $employee === null ? collect() : AttendanceCorrectionRequest::query()->with('status')->where('employee_id', $employee->id)->latest('correction_date')->limit(10)->get(),
+        ];
     }
 
     public function createEmployeeWithUser(array $payload)

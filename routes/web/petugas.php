@@ -39,7 +39,9 @@ Route::prefix('hrd')->name('hrd.')->middleware(['auth', 'role:HRD'])->group(func
     Route::get('/attendance-corrections/{id}', [AttendanceCorrectionController::class, 'show'])->name('attendance-corrections.show');
     Route::post('/attendance-corrections/{id}/approve', [AttendanceCorrectionController::class, 'approve'])->name('attendance-corrections.approve');
     Route::post('/attendance-corrections/{id}/reject', [AttendanceCorrectionController::class, 'reject'])->name('attendance-corrections.reject');
-    Route::get('/employee-schedules', EmployeeScheduleController::class)->name('employee-schedules');
+    Route::get('/employee-schedules', [EmployeeScheduleController::class, 'index'])->name('employee-schedules');
+    Route::post('/employee-schedules', [EmployeeScheduleController::class, 'store'])->name('employee-schedules.store');
+    Route::delete('/employee-schedules/{id}', [EmployeeScheduleController::class, 'destroy'])->name('employee-schedules.destroy');
     Route::get('/leave-balances', [LeaveBalanceController::class, 'index'])->name('leave-balances');
     Route::post('/leave-balances/{id}/adjust', [LeaveBalanceController::class, 'adjust'])->name('leave-balances.adjust');
     Route::post('/leave-balances/generate', [LeaveBalanceController::class, 'generate'])->name('leave-balances.generate');

@@ -8,7 +8,7 @@
 <div class="ka-mobile-shell">
     <div class="ka-toolbar"><div><h2 class="ka-page-title">{{ $title }}</h2><p class="ka-page-subtitle">Isi periode dan alasan pengajuan secara jelas.</p></div><a href="{{ route('employee.leave-requests') }}" class="btn btn-light">Kembali</a></div>
     <div class="ka-form-panel p-3 p-md-4">
-        <form method="POST" action="{{ route('employee.leave-requests.store') }}" class="row g-3" id="leave-form">
+        <form method="POST" action="{{ route('employee.leave-requests.store') }}" class="row g-3" id="leave-form" enctype="multipart/form-data">
             @csrf
             @if($leaveBalance)
             <div class="col-12"><div class="alert alert-info"><strong>Sisa Cuti Tahunan {{ $leaveBalance->year }}:</strong> {{ $leaveBalance->remaining_quota }} hari dari {{ $leaveBalance->total_quota }} hari (Terpakai {{ $leaveBalance->used_quota }} hari)</div></div>
@@ -18,6 +18,7 @@
             <div class="col-md-4"><label class="form-label">Tanggal Selesai</label><input type="date" name="end_date" id="end_date" class="form-control" required><div class="form-text">Untuk cuti 1 hari, isi tanggal selesai sama dengan tanggal mulai.</div></div>
             <div class="col-12"><div class="ka-total-days"><strong id="total-days">0 hari</strong><div class="small" id="total-days-note">Total hari dihitung otomatis dari tanggal mulai dan selesai.</div></div></div>
             <div class="col-12"><label class="form-label">Alasan</label><textarea name="reason" rows="4" class="form-control" placeholder="Contoh: Izin keluarga, sakit, atau cuti tahunan" required></textarea></div>
+            <div class="col-12"><label class="form-label">Attachment Pendukung</label><input type="file" name="attachment" class="form-control" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"><div class="form-text">Opsional. Maksimal 5 MB. Format: JPG, PNG, PDF, DOC, DOCX.</div></div>
             <div class="col-12"><button class="btn btn-primary btn-lg w-100">Kirim Pengajuan</button></div>
         </form>
     </div>

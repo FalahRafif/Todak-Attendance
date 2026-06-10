@@ -61,7 +61,14 @@
                     <div id="checkout-map" class="ka-location-map" data-office-latitude="{{ $employee->workLocation?->latitude }}" data-office-longitude="{{ $employee->workLocation?->longitude }}" data-office-name="{{ $employee->workLocation?->name ?? 'Kantor' }}" data-radius="{{ $employee->workLocation?->radius_meter ?? 100 }}"></div>
                     <div class="ka-map-legend"><span><i class="ka-map-dot" style="background:#0f4c81"></i>Posisi kantor</span><span><i class="ka-map-dot" style="background:#10b981"></i>Posisi Anda</span><span>Peta hanya tampil, tidak bisa digeser manual.</span></div>
                 </div>
-                <div class="col-12"><label class="form-label">Catatan</label><textarea name="note" class="form-control" rows="3" placeholder="Wajib jika berada di luar radius lokasi kerja"></textarea></div>
+                <div class="col-12"><label class="form-label">Catatan</label><textarea name="note" id="note" class="form-control" rows="3" placeholder="Opsional. Wajib jika berada di luar radius lokasi kerja."></textarea></div>
+                <div class="col-12 d-none" id="outside-radius-section">
+                    <div class="alert alert-warning mb-3"><strong>Luar Radius Terdeteksi</strong><br>Posisi Anda berada di luar area kantor. Pilih mode kerja dan isi catatan untuk melanjutkan.</div>
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">Mode Kerja <span class="text-danger">*</span></label><select name="work_mode_id" id="work_mode_id" class="form-control"><option value="">-- Pilih Mode Kerja --</option>@foreach($workModes as $mode)<option value="{{ $mode->id }}">{{ friendly_label($mode->description) }}</option>@endforeach</select></div>
+                        <div class="col-md-6"><div class="form-text mt-2 pt-2">Pilih mode kerja selain Office karena Anda berada di luar radius kantor.</div></div>
+                    </div>
+                </div>
                 <div class="col-12"><div id="helper" class="alert alert-info mb-0">Ambil selfie dan GPS sebelum submit.</div></div>
                 <div class="col-12 ka-sticky-submit"><button class="btn btn-primary btn-lg w-100 shadow" id="submit-attendance" disabled>Submit {{ $title }}</button></div>
             </form>
@@ -92,10 +99,35 @@
         var userMarker = null;
         var officeMarker = null;
         var radiusCircle = null;
+        var isInsideRadius = true;
+        var officeLatitude = parseFloat(mapElement ? mapElement.dataset.officeLatitude : '0');
+        var officeLongitude = parseFloat(mapElement ? mapElement.dataset.officeLongitude : '0');
+        var officeRadius = parseInt(mapElement ? mapElement.dataset.radius : '100', 10) || 100;
 
         function setHelper(message, type) {
             helper.className = 'alert alert-' + type + ' mb-0';
             helper.textContent = message;
+        }
+
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            var R = 6371000;
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLon = (lon2 - lon1) * Math.PI / 180;
+            var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+        }
+
+        function checkOutsideRadius(latitude, longitude) {
+            if (!isFinite(officeLatitude) || !isFinite(officeLongitude)) { isInsideRadius = true; return; }
+            var distance = haversineDistance(officeLatitude, officeLongitude, latitude, longitude);
+            isInsideRadius = distance <= officeRadius;
+            var section = document.getElementById('outside-radius-section');
+            if (isInsideRadius) {
+                section.classList.add('d-none');
+            } else {
+                section.classList.remove('d-none');
+                document.getElementById('note').setAttribute('placeholder', 'Wajib diisi karena di luar radius kantor.');
+            }
         }
 
         function refreshSubmitState() {
@@ -224,6 +256,7 @@
                 gpsStep.classList.add('is-done');
                 gpsText.textContent = 'Akurasi ' + Math.round(position.coords.accuracy) + ' meter';
                 updateCheckoutMap(position.coords.latitude, position.coords.longitude);
+                checkOutsideRadius(position.coords.latitude, position.coords.longitude);
                 refreshSubmitState();
             }, function () {
                 setHelper('GPS tidak dapat diakses. Pastikan izin lokasi aktif.', 'danger');
@@ -235,6 +268,21 @@
             if (submit.disabled) {
                 event.preventDefault();
                 setHelper('Ambil selfie dan GPS sebelum submit.', 'warning');
+                return;
+            }
+            if (!isInsideRadius) {
+                var workMode = document.getElementById('work_mode_id').value;
+                var note = document.getElementById('note').value.trim();
+                if (!workMode) {
+                    event.preventDefault();
+                    setHelper('Mode kerja wajib dipilih karena berada di luar radius lokasi kerja.', 'danger');
+                    return;
+                }
+                if (!note) {
+                    event.preventDefault();
+                    setHelper('Catatan wajib diisi karena berada di luar radius lokasi kerja.', 'danger');
+                    return;
+                }
             }
         });
     }

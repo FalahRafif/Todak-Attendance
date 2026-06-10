@@ -2,6 +2,10 @@
 
 namespace App\Services\Hr;
 
+use App\Models\Attendance;
+use App\Models\AttendanceCorrectionRequest;
+use App\Models\Employee;
+use App\Models\LeaveRequest;
 use App\Repositories\Contracts\DepartmentRepositoryInterface;
 use App\Repositories\Contracts\HolidayRepositoryInterface;
 use App\Repositories\Contracts\PositionRepositoryInterface;
@@ -30,6 +34,11 @@ class HrMasterService
                 'Work Locations' => $this->workLocationRepository->query()->count(),
                 'Shifts' => $this->shiftRepository->query()->count(),
                 'Holidays' => $this->holidayRepository->query()->count(),
+                'Active Employees' => Employee::query()->where('is_active', true)->count(),
+                'Attendance Today' => Attendance::query()->whereDate('attendance_date', today())->count(),
+                'Pending Leave' => LeaveRequest::query()->whereHas('employee')->whereHas('status', fn ($query) => $query->where('description', 'pending'))->count(),
+                'Pending Correction' => AttendanceCorrectionRequest::query()->whereHas('employee')->whereHas('status', fn ($query) => $query->where('description', 'pending'))->count(),
+                'Outside Radius Pending' => Attendance::query()->where('is_need_approval', true)->count(),
             ],
         ];
     }

@@ -7,13 +7,16 @@ use App\Models\Attendance;
 use App\Models\AttendanceCorrectionRequest;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
+use App\Models\EmployeeSchedule;
 use App\Models\Holiday;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestDetail;
 use App\Models\Reference;
 use App\Models\User;
+use App\Services\ActivityLogService;
 use App\Services\AttachmentSecurityService;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -38,12 +41,12 @@ class EmployeePortalService
 
     public function attendanceFormData(string $type): array
     {
-        return ['title' => $type === 'check_in' ? 'Absen Masuk' : 'Absen Pulang', 'employee' => $this->employee(), 'todayAttendance' => $this->todayAttendance(), 'type' => $type];
+        return ['title' => $type === 'check_in' ? 'Absen Masuk' : 'Absen Pulang', 'employee' => $this->employee(), 'todayAttendance' => $this->todayAttendance(), 'type' => $type, 'workModes' => Reference::query()->where('group_id', 'WORK_MODE')->where('description', '!=', 'office')->orderBy('description')->get()];
     }
 
     public function checkIn(array $payload, Request $request): void
     {
-        $employee = $this->employee();
+        $employee = $this->employeeWithTodaySchedule();
         $this->ensureEmployeeCanAttend($employee);
         if ($this->todayAttendance() !== null) {
             throw new RuntimeException('Absen masuk hari ini sudah tercatat.');
@@ -55,14 +58,15 @@ class EmployeePortalService
             $this->ensureOutsideRadiusContext($inside, $payload['work_mode_id'] ?? null, $payload['note'] ?? null);
             $attachmentId = $this->storeCameraPhoto($payload['photo_data'], 'check-in');
             $lateMinutes = $this->lateMinutes($employee);
-            $attendance = Attendance::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $employee->id, 'shift_id' => $employee->shift_id, 'work_location_id' => $employee->work_location_id, 'attendance_date' => today(), 'check_in_at' => now(), 'check_in_photo_attachment_id' => $attachmentId, 'check_in_latitude' => $payload['latitude'], 'check_in_longitude' => $payload['longitude'], 'check_in_distance_meter' => $distance, 'check_in_gps_accuracy_meter' => $payload['gps_accuracy_meter'] ?? null, 'check_in_is_inside_radius' => $inside, 'check_in_work_mode_id' => $payload['work_mode_id'] ?? null, 'check_in_note' => $payload['note'] ?? null, 'check_in_device_info' => $request->userAgent(), 'late_minutes' => $lateMinutes, 'status_id' => $this->requiredAttendanceStatusId($lateMinutes > 0 ? 'late' : 'present'), 'is_need_approval' => ! $inside, 'created_by' => auth()->id()]);
+            $attendance = Attendance::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $employee->id, 'shift_id' => $employee->shift_id, 'work_location_id' => $employee->work_location_id, 'attendance_date' => today(), 'check_in_at' => now(), 'check_in_photo_attachment_id' => $attachmentId, 'check_in_latitude' => $payload['latitude'], 'check_in_longitude' => $payload['longitude'], 'check_in_distance_meter' => $distance, 'check_in_gps_accuracy_meter' => $payload['gps_accuracy_meter'] ?? null, 'check_in_is_inside_radius' => $inside, 'check_in_work_mode_id' => $payload['work_mode_id'] ?? null, 'check_in_note' => $payload['note'] ?? null, 'check_in_device_info' => $request->userAgent(), 'late_minutes' => $lateMinutes, 'status_id' => $this->requiredAttendanceStatusId($lateMinutes > 0 ? 'late' : 'present'), 'is_need_approval' => ! $inside, 'outside_radius_review_status_id' => $inside ? null : $this->approvalStatusId('pending'), 'created_by' => auth()->id()]);
             $this->logAttendance($attendance, 'check_in', $payload, $attachmentId, $inside, $distance, $request);
+            app(ActivityLogService::class)->log('attendance', 'check_in', 'Employee check-in', null, ['attendance_id' => $attendance->id, 'inside_radius' => $inside, 'distance_meter' => $distance], auth()->id(), $request);
         });
     }
 
     public function checkOut(array $payload, Request $request): void
     {
-        $employee = $this->employee();
+        $employee = $this->employeeWithTodaySchedule();
         $this->ensureEmployeeCanAttend($employee);
         $attendance = $this->todayAttendance();
         if ($attendance === null || $attendance->check_in_at === null) {
@@ -77,8 +81,9 @@ class EmployeePortalService
             $inside = $this->isInsideRadius($employee, $distance);
             $this->ensureOutsideRadiusContext($inside, $payload['work_mode_id'] ?? null, $payload['note'] ?? null);
             $attachmentId = $this->storeCameraPhoto($payload['photo_data'], 'check-out');
-            $attendance->update(['check_out_at' => now(), 'check_out_photo_attachment_id' => $attachmentId, 'check_out_latitude' => $payload['latitude'], 'check_out_longitude' => $payload['longitude'], 'check_out_distance_meter' => $distance, 'check_out_gps_accuracy_meter' => $payload['gps_accuracy_meter'] ?? null, 'check_out_is_inside_radius' => $inside, 'check_out_work_mode_id' => $payload['work_mode_id'] ?? null, 'check_out_note' => $payload['note'] ?? null, 'check_out_device_info' => $request->userAgent(), 'total_work_minutes' => max(0, $attendance->check_in_at->diffInMinutes(now(), false)), 'early_leave_minutes' => $this->earlyLeaveMinutes($employee, now()), 'is_need_approval' => $attendance->is_need_approval || ! $inside, 'updated_by' => auth()->id()]);
+            $attendance->update(['check_out_at' => now(), 'check_out_photo_attachment_id' => $attachmentId, 'check_out_latitude' => $payload['latitude'], 'check_out_longitude' => $payload['longitude'], 'check_out_distance_meter' => $distance, 'check_out_gps_accuracy_meter' => $payload['gps_accuracy_meter'] ?? null, 'check_out_is_inside_radius' => $inside, 'check_out_work_mode_id' => $payload['work_mode_id'] ?? null, 'check_out_note' => $payload['note'] ?? null, 'check_out_device_info' => $request->userAgent(), 'total_work_minutes' => max(0, $attendance->check_in_at->diffInMinutes(now(), false)), 'early_leave_minutes' => $this->earlyLeaveMinutes($employee, now()), 'is_need_approval' => $attendance->is_need_approval || ! $inside, 'outside_radius_review_status_id' => ($attendance->is_need_approval || ! $inside) ? $this->approvalStatusId('pending') : $attendance->outside_radius_review_status_id, 'updated_by' => auth()->id()]);
             $this->logAttendance($attendance->refresh(), 'check_out', $payload, $attachmentId, $inside, $distance, $request);
+            app(ActivityLogService::class)->log('attendance', 'check_out', 'Employee check-out', null, ['attendance_id' => $attendance->id, 'inside_radius' => $inside, 'distance_meter' => $distance], auth()->id(), $request);
         });
     }
 
@@ -206,7 +211,9 @@ class EmployeePortalService
 
     public function leaveDetailData(int $id): array
     {
-        return ['title' => 'Detail Pengajuan Izin/Cuti', 'item' => LeaveRequest::query()->with(['leaveType', 'status'])->where('employee_id', $this->employee()->id)->findOrFail($id)];
+        $item = LeaveRequest::query()->with(['leaveType', 'status', 'attachment'])->where('employee_id', $this->employee()->id)->findOrFail($id);
+
+        return ['title' => 'Detail Pengajuan Izin/Cuti', 'item' => $item, 'attachmentUrl' => app(AttachmentSecurityService::class)->generateTemporaryPreviewUrl($item->attachment)];
     }
 
     public function createLeave(array $payload): void
@@ -217,7 +224,9 @@ class EmployeePortalService
         $this->ensureNoOverlappingLeave($employee->id, $start, $end);
         $this->ensureLeaveBalanceEnough($employee->id, (int) $payload['leave_type_id'], $start->year, $start->diffInDays($end) + 1);
         $this->ensureSameYearLeave($start, $end, (int) $payload['leave_type_id']);
-        LeaveRequest::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $employee->id, 'leave_type_id' => $payload['leave_type_id'], 'start_date' => $start, 'end_date' => $end, 'total_days' => $start->diffInDays($end) + 1, 'reason' => $payload['reason'], 'status_id' => $this->approvalStatusId('pending'), 'created_by' => auth()->id()]);
+        $attachmentId = isset($payload['attachment']) && $payload['attachment'] instanceof UploadedFile ? $this->storeRequestAttachment($payload['attachment'], 'leave-requests') : null;
+        $leave = LeaveRequest::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $employee->id, 'leave_type_id' => $payload['leave_type_id'], 'start_date' => $start, 'end_date' => $end, 'total_days' => $start->diffInDays($end) + 1, 'reason' => $payload['reason'], 'attachment_id' => $attachmentId, 'status_id' => $this->approvalStatusId('pending'), 'created_by' => auth()->id()]);
+        app(ActivityLogService::class)->log('leave_request', 'submit', 'Employee submit leave request', null, ['leave_request_id' => $leave->id, 'start_date' => $start->format('Y-m-d'), 'end_date' => $end->format('Y-m-d'), 'attachment_id' => $attachmentId]);
     }
 
     public function cancelLeave(int $id): void
@@ -226,7 +235,9 @@ class EmployeePortalService
         if ($item->status_id !== $this->approvalStatusId('pending')) {
             throw new RuntimeException('Hanya pengajuan yang masih menunggu persetujuan yang bisa dibatalkan.');
         }
+        $old = $item->only(['status_id']);
         $item->update(['status_id' => $this->approvalStatusId('cancelled'), 'updated_by' => auth()->id()]);
+        app(ActivityLogService::class)->log('leave_request', 'cancel', 'Employee cancel leave request', $old, ['leave_request_id' => $item->id, 'status_id' => $item->status_id]);
     }
 
     public function correctionListData(Request $request): array
@@ -248,7 +259,9 @@ class EmployeePortalService
 
     public function correctionDetailData(int $id): array
     {
-        return ['title' => 'Detail Koreksi Absensi', 'item' => AttendanceCorrectionRequest::query()->with('status')->where('employee_id', $this->employee()->id)->findOrFail($id)];
+        $item = AttendanceCorrectionRequest::query()->with(['status', 'attachment'])->where('employee_id', $this->employee()->id)->findOrFail($id);
+
+        return ['title' => 'Detail Koreksi Absensi', 'item' => $item, 'attachmentUrl' => app(AttachmentSecurityService::class)->generateTemporaryPreviewUrl($item->attachment)];
     }
 
     public function createCorrection(array $payload): void
@@ -260,7 +273,9 @@ class EmployeePortalService
             throw new RuntimeException('Koreksi pending untuk tanggal ini sudah ada.');
         }
 
-        AttendanceCorrectionRequest::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $this->employee()->id, 'correction_date' => $payload['correction_date'], 'requested_check_in_at' => $payload['requested_check_in_at'] ?? null, 'requested_check_out_at' => $payload['requested_check_out_at'] ?? null, 'reason' => $payload['reason'], 'status_id' => $this->approvalStatusId('pending'), 'created_by' => auth()->id()]);
+        $attachmentId = isset($payload['attachment']) && $payload['attachment'] instanceof UploadedFile ? $this->storeRequestAttachment($payload['attachment'], 'attendance-corrections') : null;
+        $correction = AttendanceCorrectionRequest::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $this->employee()->id, 'correction_date' => $payload['correction_date'], 'requested_check_in_at' => $payload['requested_check_in_at'] ?? null, 'requested_check_out_at' => $payload['requested_check_out_at'] ?? null, 'reason' => $payload['reason'], 'attachment_id' => $attachmentId, 'status_id' => $this->approvalStatusId('pending'), 'created_by' => auth()->id()]);
+        app(ActivityLogService::class)->log('attendance_correction', 'submit', 'Employee submit attendance correction', null, ['attendance_correction_request_id' => $correction->id, 'correction_date' => $payload['correction_date'], 'attachment_id' => $attachmentId]);
     }
 
     public function cancelCorrection(int $id): void
@@ -269,7 +284,9 @@ class EmployeePortalService
         if ($item->status_id !== $this->approvalStatusId('pending')) {
             throw new RuntimeException('Hanya pengajuan yang masih menunggu persetujuan yang bisa dibatalkan.');
         }
+        $old = $item->only(['status_id']);
         $item->update(['status_id' => $this->approvalStatusId('cancelled'), 'updated_by' => auth()->id()]);
+        app(ActivityLogService::class)->log('attendance_correction', 'cancel', 'Employee cancel attendance correction', $old, ['attendance_correction_request_id' => $item->id, 'status_id' => $item->status_id]);
     }
 
     public function profileData(): array
@@ -306,6 +323,7 @@ class EmployeePortalService
 
             User::query()->whereKey($employee->user_id)->update($userPayload);
         });
+        app(ActivityLogService::class)->log('profile', 'update', 'Employee update profile', null, ['employee_id' => $employee->id]);
     }
 
     private function employee(): Employee
@@ -314,6 +332,24 @@ class EmployeePortalService
 
         if ($employee === null) {
             abort(403, 'Akun Employee belum terhubung ke data karyawan. Lengkapi data Employee pada menu Admin > Employees.');
+        }
+
+        return $employee;
+    }
+
+    private function employeeWithTodaySchedule(): Employee
+    {
+        $employee = $this->employee();
+        $schedule = EmployeeSchedule::query()->with('shift')->where('employee_id', $employee->id)->whereDate('schedule_date', today())->first();
+        if ($schedule === null) {
+            return $employee;
+        }
+        if ($schedule->is_day_off) {
+            throw new RuntimeException('Hari ini terjadwal day off. Absensi tidak diwajibkan.');
+        }
+        if ($schedule->shift_id !== null && $schedule->shift !== null) {
+            $employee->shift_id = $schedule->shift_id;
+            $employee->setRelation('shift', $schedule->shift);
         }
 
         return $employee;
@@ -454,6 +490,14 @@ class EmployeePortalService
         }
     }
 
+    private function storeRequestAttachment(UploadedFile $file, string $directory): int
+    {
+        $stored = app(AttachmentSecurityService::class)->storeEncryptedUploadedFile($file, $directory.'/'.date('Y/m'));
+        $typeId = str_starts_with((string) $file->getMimeType(), 'image/') ? $this->requiredAttachmentImageTypeId() : $this->requiredAttachmentDocumentTypeId();
+
+        return Attachment::query()->create(['uuid' => (string) Str::uuid(), 'name' => $file->getClientOriginalName(), 'path' => $stored['encrypted_path'], 'type_file' => $typeId, 'created_by' => auth()->id()])->id;
+    }
+
     private function storeProfilePhoto($file): int
     {
         $stored = app(AttachmentSecurityService::class)->storeEncryptedProfileImage($file);
@@ -529,6 +573,16 @@ class EmployeePortalService
         $id = Reference::query()->where('code', 'TF_IMG')->value('id');
         if ($id === null) {
             throw new RuntimeException('Reference TF_IMG belum tersedia.');
+        }
+
+        return $id;
+    }
+
+    private function requiredAttachmentDocumentTypeId(): int
+    {
+        $id = Reference::query()->where('code', 'TF_DOC')->value('id');
+        if ($id === null) {
+            throw new RuntimeException('Reference TF_DOC belum tersedia.');
         }
 
         return $id;

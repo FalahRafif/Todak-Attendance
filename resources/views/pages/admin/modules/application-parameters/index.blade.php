@@ -2,7 +2,7 @@
 @section('title', $title)
 @section('content')
 @include('pages.admin.modules.partials.flash')
-<div class="ka-toolbar"><div><h2 class="ka-page-title">{{ $title }}</h2><p class="ka-page-subtitle">Kelola parameter global aplikasi KlikAbsen.</p></div></div>
+<div class="ka-toolbar"><div><h2 class="ka-page-title">{{ $title }}</h2><p class="ka-page-subtitle">Kelola parameter global aplikasi Todak Attendace.</p></div></div>
 <div class="row g-3">
     <div class="col-lg-8">
         <div class="card custom-card ka-card">
