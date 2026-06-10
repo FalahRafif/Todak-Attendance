@@ -131,11 +131,15 @@ class HrMasterService
 
     public function createShift(array $payload)
     {
+        $payload['custom_days'] = ($payload['applicable_days'] ?? '') === 'custom' ? ($payload['custom_days'] ?? []) : null;
+
         return $this->shiftRepository->create(array_merge($this->normalizeBooleans($payload, ['is_overnight', 'is_active']), ['uuid' => (string) Str::uuid()]));
     }
 
     public function updateShift(int $id, array $payload)
     {
+        $payload['custom_days'] = ($payload['applicable_days'] ?? '') === 'custom' ? ($payload['custom_days'] ?? []) : null;
+
         return $this->shiftRepository->update($id, $this->normalizeBooleans($payload, ['is_overnight', 'is_active']));
     }
 

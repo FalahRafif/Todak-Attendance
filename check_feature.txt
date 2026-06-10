@@ -1,0 +1,606 @@
+# Check Feature KlikAbsen
+
+Tanggal audit: 2026-06-10
+Metode audit: baca BRD, README, revision_feature, route/controller/service/view/model yang relevan, dan diff implementasi terakhir. Status ini adalah analisis kode statis + hasil verifikasi syntax/cache, bukan QA manual penuh di browser.
+
+## Ringkasan Eksekutif
+
+### Sudah ada dan relatif berfungsi
+- Auth login/logout dan redirect role Admin, HRD, Employee.
+- Role-based access untuk prefix Admin, HRD, Employee.
+- Admin CRUD master utama: departments, positions, work locations, shifts, holidays, employees.
+- Employee dashboard, absensi hari ini, check-in, check-out, riwayat, kalender, pengajuan izin/cuti, koreksi absensi, profil.
+- HRD dashboard, monitoring absensi, belum check-in, belum check-out, terlambat, outside radius, approval pengajuan, approval koreksi, laporan harian/bulanan, export CSV, jadwal karyawan read-only, saldo cuti read-only.
+- Attachment preview signed URL untuk profile image terenkripsi.
+- Foto attendance sekarang punya relasi `checkInPhoto` dan `checkOutPhoto`, dan HRD detail menampilkan foto via signed preview URL.
+
+### Sudah direvisi pada implementasi terakhir
+- Outside radius pada check-in/check-out sekarang wajib `work_mode_id` + `note` di backend.
+- Outside radius menolak work mode `office` dan memastikan reference group `WORK_MODE`.
+- Check-in terlambat sekarang mengubah `status_id` menjadi `late` jika melewati toleransi shift.
+- `late_minutes` sekarang dihitung setelah toleransi shift.
+- Check-out Employee sekarang menghitung `early_leave_minutes` dari shift end, termasuk overnight shift sederhana.
+- HRD Belum Check-in sekarang exclude holiday, employee day off, dan approved leave berdasarkan range `leave_requests`.
+- Employee leave request sekarang validasi overlap pending/approved.
+- Employee annual leave sekarang validasi sisa `leave_balances` saat submit.
+- Leave cancel dan correction cancel sekarang update status `cancelled`, bukan delete row.
+- Employee correction sekarang menolak duplikasi pending untuk employee + tanggal sama.
+- HRD leave approval sekarang membuat `leave_request_details` per tanggal.
+- HRD leave approval sekarang mengurangi `leave_balances` untuk annual leave.
+- HRD correction approval sekarang menghitung ulang `late_minutes`, `total_work_minutes`, `early_leave_minutes`, dan status present/late.
+- Controller HRD leave/correction approval menangkap RuntimeException agar error bisnis tampil ke UI, bukan 500.
+
+### Sudah ada tapi belum berfungsi penuh / flow masih kurang
+- Activity log table/model ada, tapi aksi penting belum konsisten dicatat ke `activity_logs`.
+- `approvals` table/model ada, tapi approval leave/correction/outside radius masih langsung update tabel target, belum memakai tabel `approvals`.
+- Leave/correction attachment column ada, tapi form Employee belum upload attachment pendukung.
+- Attendance photo masih disimpan di public storage, walau preview HRD sudah lewat signed route.
+- Employee attendance detail sudah load relasi foto, tetapi view Employee detail belum terlihat menampilkan foto selfie.
+- Validasi outside radius di frontend belum jelas disable submit sampai work mode + note terisi; backend sudah wajib.
+- Employee leave submit/correction submit belum catch RuntimeException di controller store, sehingga validasi service seperti saldo/overlap berisiko 500 jika tidak ditangani global.
+- HRD daily/monthly report ada, tapi kolom/filter belum selengkap BRD.
+- HRD leave requests dan attendance corrections belum punya filter status/tanggal/departemen.
+- HRD employee schedules dan leave balances read-only saja; tidak ada create/update dari Admin/HRD.
+- Admin employee detail route target BRD belum ada; hanya index/create/edit/update/delete.
+- Sidebar/menu wording masih sebagian English di config, walau view utama sudah banyak dibenahi.
+- Monthly summary generate masih memakai `updateOrCreate` dengan `uuid` di update payload, sehingga UUID existing masih berpotensi berubah tiap generate.
+- Leave approval sudah memakai beberapa operasi multi-table, tetapi belum dibungkus `DB::transaction` di `HrdService`.
+- Leave balance reduce belum idempotent jika approve dipanggil ulang secara race condition; status pending dicek, tetapi tetap perlu transaction/locking untuk aman.
+
+### Belum ada
+- Admin Settings, References, Roles, Users, Activity Logs UI.
+- Admin Employee Work Locations UI.
+- Admin Employee Schedules UI / pengelolaan jadwal.
+- Employee attachment upload untuk leave/correction.
+- Report Employee Attendance Report khusus per employee.
+- Export Excel asli `.xlsx`; yang ada CSV.
+- Notifikasi/push/email.
+- Activity log UI dan audit trail detail.
+
+---
+
+## Detail Per Modul
+
+## 1. Authentication & Authorization
+
+### Sudah ada dan berfungsi
+- `GET /` redirect ke `/login`.
+- `GET /login` halaman login.
+- `POST /api/login` proses login.
+- `POST /api/logout` dan `POST /api/admin/logout` logout.
+- Role final Admin, HRD, Employee sudah ada di config akses.
+- Dashboard redirect berdasarkan role via `config/role_access.php`.
+- Middleware role dipakai pada route `/admin`, `/hrd`, `/employee`.
+
+### Kurang / risiko
+- `README.md` pada bagian ringkas lama masih menyebut dashboard route minimal hanya Admin dan HRD, walau bagian roadmap sudah menyebut Employee.
+- Menu label masih campur English/Indonesia di `config/role_access.php`.
+- Belum terlihat fitur lupa password/reset password UI.
+
+### Belum ada
+- Password reset flow user-facing.
+- Manajemen sesi/device aktif.
+
+## 2. Admin Module
+
+### 2.1 Dashboard Admin
+
+#### Sudah ada dan berfungsi
+- Route `GET /admin/dashboard` aktif.
+- View dashboard ada.
+
+#### Kurang
+- Dashboard masih minimal; belum banyak insight operasional seperti total employee aktif, absensi hari ini, pending approval, lokasi/shift aktif.
+
+### 2.2 Departments
+
+#### Sudah ada dan berfungsi
+- List, create, store, edit, update, delete.
+- Route lengkap CRUD dasar.
+- Service/repository dipakai lewat `HrMasterService`.
+
+#### Kurang
+- Belum ada validasi relasi sebelum delete dari sisi UX; delete kemungkinan soft delete, tapi perlu pastikan data dipakai tidak merusak flow.
+- UI belum se-mobile-first Employee/HRD terbaru.
+
+### 2.3 Positions
+
+#### Sudah ada dan berfungsi
+- List, create, store, edit, update, delete.
+- Bisa relasi ke department.
+
+#### Kurang
+- Sama seperti departments: UX mobile belum sekuat Employee/HRD.
+- Guard data terpakai perlu dicek manual.
+
+### 2.4 Work Locations
+
+#### Sudah ada dan berfungsi
+- List, create, store, edit, update, delete.
+- Form sudah memakai Leaflet map lokal.
+- Latitude/longitude dan radius bisa diatur.
+- Default koordinat Monas.
+
+#### Kurang
+- Validasi radius/settings global belum terhubung penuh ke setting `ATTENDANCE_RADIUS_METER`; employee memakai radius lokasi kerja fallback 100.
+- Delete lokasi yang dipakai employee/attendance perlu guard UX lebih jelas.
+
+### 2.5 Shifts
+
+#### Sudah ada dan berfungsi
+- List, create, store, edit, update, delete.
+- Field start/end/check-in/check-out/tolerance/overnight tampak tersedia dari model/migration.
+- Check-in dan correction sekarang menghitung late setelah tolerance.
+- Check-out Employee dan correction approval sudah menghitung early leave dari shift end.
+
+#### Kurang
+- Flow overnight sudah ditangani dasar, tetapi belum QA manual dengan kasus shift 22:00-06:00.
+- Attendance masih memakai shift default employee, belum override dari `employee_schedules`.
+
+### 2.6 Holidays
+
+#### Sudah ada dan berfungsi
+- List, create, store, edit, update, delete.
+- Employee calendar menampilkan holiday.
+- HRD Belum Check-in sekarang tidak menampilkan employee pada tanggal holiday.
+
+#### Kurang
+- Absensi check-in Employee belum memblokir/menandai khusus hari libur.
+
+### 2.7 Employees
+
+#### Sudah ada dan berfungsi
+- List, create, store, edit, update, delete.
+- Bisa buat user + employee data.
+- Role Employee didukung.
+- Profile image terenkripsi via `AttachmentSecurityService` untuk admin/employee.
+- Employee wajib shift dan work location jika role Employee.
+
+#### Kurang
+- Route detail `GET /admin/employees/{id}` target BRD belum ada.
+- Belum ada filter/search advanced jelas untuk employee.
+- Employee Work Locations multi-location table ada, tapi UI belum ada.
+- Employee schedules target management belum ada di Admin.
+
+### 2.8 System Admin
+
+#### Belum ada
+- Settings UI.
+- References UI.
+- Roles UI.
+- Users UI terpisah dari Employee.
+- Activity Logs UI.
+
+## 3. Employee Module
+
+### 3.1 Dashboard Employee
+
+#### Sudah ada dan berfungsi
+- Route `GET /employee/dashboard` aktif.
+- Dashboard mobile-first.
+- Menampilkan status hari ini, shift, lokasi, CTA absen, kalender, pengajuan, koreksi, riwayat minggu ini.
+- Guard user Employee tanpa data employee sudah ada dengan error 403 jelas.
+
+#### Kurang
+- Belum ada notifikasi ringkas seperti pending approval detail selain count.
+
+### 3.2 Attendance Today
+
+#### Sudah ada dan berfungsi
+- Route `GET /employee/attendance` aktif.
+- Step absen masuk/pulang mobile-first.
+- Tombol check-in/check-out menyesuaikan status.
+
+#### Kurang
+- Belum terlihat handling jadwal harian `employee_schedules`; masih memakai shift utama employee.
+- Hari libur belum terlihat memengaruhi tombol absensi Employee.
+
+### 3.3 Check-in
+
+#### Sudah ada dan berfungsi
+- Route form + submit aktif.
+- Kamera browser aktif, selfie wajib dari capture UI.
+- GPS wajib.
+- Jarak ke work location dihitung.
+- Outside radius diizinkan jika work mode valid dan note diisi.
+- Work mode outside radius wajib di backend.
+- Work mode outside radius tidak boleh `office`.
+- Attendance dibuat dalam transaction.
+- Attachment foto dibuat.
+- Attendance log `check_in` dibuat.
+- Duplicate check-in ditolak backend dan UI.
+- Timezone Asia/Jakarta sudah diset.
+- `late_minutes` dihitung setelah tolerance.
+- Status check-in otomatis `late` jika lewat tolerance, `present` jika tidak.
+
+#### Kurang
+- Foto attendance disimpan public storage biasa, bukan encrypted seperti profile image.
+- Anti-upload-gallery bergantung UI browser; backend menerima `photo_data` string.
+- UI frontend belum dipastikan disable submit saat outside radius tanpa work mode + note; backend sudah menolak.
+
+### 3.4 Check-out
+
+#### Sudah ada dan berfungsi
+- Route form + submit aktif.
+- Kamera/GPS/selfie sama seperti check-in.
+- Check-out hanya jika sudah check-in.
+- Duplicate check-out ditolak.
+- Attendance log `check_out` dibuat.
+- Total work minutes dihitung.
+- `early_leave_minutes` sekarang dihitung dari shift end.
+- Outside radius wajib work mode + note di backend.
+
+#### Kurang
+- Foto attendance public storage biasa.
+- Shift overnight perlu QA manual mendalam.
+- UI frontend belum dipastikan disable submit saat outside radius tanpa work mode + note; backend sudah menolak.
+
+### 3.5 Attendance History & Detail
+
+#### Sudah ada dan berfungsi
+- History route aktif.
+- Detail route aktif.
+- Filter bulan/status.
+- Mobile card list.
+- Detail menunjukkan status, telat, toleransi, jam kerja, lokasi, catatan, HRD review.
+- Service sudah load relasi `checkInPhoto` dan `checkOutPhoto`.
+
+#### Kurang
+- View detail Employee belum terlihat menampilkan foto selfie walau relasi sudah diload.
+- Status raw sudah dibantu `friendly_label`, tapi beberapa istilah sistem mungkin masih perlu polishing.
+
+### 3.6 Attendance Calendar
+
+#### Sudah ada dan berfungsi
+- Route `GET /employee/attendance/calendar` aktif.
+- FullCalendar lokal.
+- Default bulan berjalan, max filter 3 bulan.
+- Event attendance, holiday, approved leave.
+- Click attendance buka detail.
+
+#### Kurang
+- Calendar tidak ada di BRD awal, tapi useful.
+- Tidak ada create action dari calendar.
+- Logic warna kalender masih membandingkan `late_minutes > lateTolerance`, padahal `late_minutes` sekarang sudah setelah tolerance; ini bisa membuat late 1-15 menit tidak merah jika tolerance 15.
+
+### 3.7 Leave Requests Employee
+
+#### Sudah ada dan berfungsi
+- List, create, store, show, cancel pending.
+- Filter month/status/type.
+- Mobile UI.
+- Total hari dihitung di form.
+- HRD approval terhubung membuat attendance status leave/sick/permission.
+- Submit leave sekarang validasi overlap pending/approved.
+- Annual leave submit sekarang validasi saldo cuti tahun berjalan.
+- Cancel pending sekarang update status `cancelled`, bukan delete row.
+
+#### Kurang
+- Attachment pendukung belum ada walau DB punya `attachment_id`.
+- `LeaveRequestController@store` belum catch RuntimeException dari service; overlap/saldo tidak cukup berisiko 500 jika tidak ditangani global.
+- Belum ada validasi overlap dengan attendance existing.
+- Validasi kuota hanya untuk annual_leave dan hanya tahun `start_date`; leave lintas tahun belum ditangani.
+- Cancel sudah status `cancelled`, tetapi belum ada audit trail.
+
+### 3.8 Attendance Corrections Employee
+
+#### Sudah ada dan berfungsi
+- List, create, store, show, cancel pending.
+- HRD approve update/create attendance.
+- Approve koreksi hitung ulang `late_minutes`, `total_work_minutes`, `early_leave_minutes`, dan status present/late.
+- Submit correction sekarang menolak pending correction untuk tanggal sama.
+- Cancel pending sekarang update status `cancelled`, bukan delete row.
+
+#### Kurang
+- Attachment pendukung belum ada.
+- `AttendanceCorrectionController@store` perlu dicek/catch RuntimeException jika service melempar error duplikasi pending.
+- Belum ada validasi tanggal approved leave/sick/permission.
+- Belum ada validasi policy maksimal koreksi, misalnya 7 hari ke belakang.
+- Cancel sudah status `cancelled`, tetapi belum ada audit trail.
+
+### 3.9 Profile Employee
+
+#### Sudah ada dan berfungsi
+- GET/PUT profile aktif.
+- Edit nama, phone, gender, username, email, password confirmed.
+- Upload foto profil terenkripsi.
+- Preview signed URL.
+
+#### Kurang
+- Belum ada crop/resize UI.
+- Belum ada delete profile photo.
+
+## 4. HRD Module
+
+### 4.1 Dashboard HRD
+
+#### Sudah ada dan berfungsi
+- Route aktif.
+- Menampilkan total karyawan, absensi hari ini, terlambat, luar radius, pending izin/cuti, pending koreksi, absensi terbaru.
+- UI sudah mobile-first.
+
+#### Kurang
+- Insight masih sederhana; belum grafik/tren.
+- Recent attendances hanya hari ini limit 8.
+
+### 4.2 Monitoring Absensi Harian
+
+#### Sudah ada dan berfungsi
+- Route `GET /hrd/attendances` aktif.
+- Filter tanggal, employee, department, work location, shift.
+- Service mendukung filter `status_id`.
+- List/detail mobile-first + table desktop.
+- CSV export dari route API HRD.
+
+#### Kurang
+- Filter status belum ada di view HRD attendance walau service mendukung `status_id`.
+- Filter work mode dan inside/outside radius belum ada, padahal BRD meminta.
+- Export kolom belum lengkap sesuai BRD.
+
+### 4.3 Belum Check-in
+
+#### Sudah ada dan berfungsi
+- Route aktif.
+- Menampilkan employee aktif yang belum punya attendance pada tanggal terpilih.
+- Filter tanggal.
+- Sekarang exclude holiday.
+- Sekarang exclude `employee_schedules.is_day_off = true`.
+- Sekarang exclude approved leave/sick/permission berdasarkan range `leave_requests`.
+
+#### Kurang
+- Exclude approved leave belum memakai `leave_request_details`; fallback range sudah ada.
+- Belum mempertimbangkan schedule harian yang override shift selain day off.
+- Jika holiday ada, semua employee dikosongkan; belum ada rule karyawan tertentu tetap masuk saat holiday.
+
+### 4.4 Belum Check-out / Incomplete
+
+#### Sudah ada dan kemungkinan berfungsi
+- Route `GET /hrd/attendances/incomplete` aktif via controller khusus.
+- Kemungkinan memakai query attendance dengan check-in ada dan check-out null.
+- View reuse attendance index.
+
+#### Kurang
+- Perlu QA manual route karena view khusus tidak ada; controller kemungkinan memakai generic attendance page.
+
+### 4.5 Terlambat
+
+#### Sudah ada dan kemungkinan berfungsi
+- Route `GET /hrd/attendances/late` aktif.
+- Query `late_minutes > 0`.
+- Karena `late_minutes` sekarang sudah dihitung setelah tolerance, late page lebih konsisten.
+
+#### Kurang
+- Perlu QA manual untuk memastikan data lama yang `late_minutes` dihitung sebelum revisi tidak mengganggu laporan.
+
+### 4.6 Outside Radius
+
+#### Sudah ada dan berfungsi
+- Route `GET /hrd/attendances/outside-radius` aktif.
+- Query `is_need_approval` atau inside radius false.
+- Detail approval ada.
+- Detail HRD sekarang menampilkan foto check-in/check-out via signed preview URL.
+
+#### Kurang
+- Reject outside radius masih memanggil approveAttendance dengan catatan; tidak ada status reject/flag khusus selain note.
+- Tidak mencatat ke `approvals` table atau `activity_logs`.
+- Report belum bisa membedakan outside radius approved vs rejected karena status review terpisah belum ada.
+
+### 4.7 Leave Request Approval HRD
+
+#### Sudah ada dan berfungsi sebagian
+- List, detail, approve, reject aktif.
+- Approve hanya untuk status pending.
+- Approve update status approved, approved_by, approved_at, approval_note.
+- Reject update status rejected dan rejected_reason.
+- Approve membuat/update attendance leave/sick/permission.
+- Approve membuat `leave_request_details` per tanggal.
+- Approve annual leave mengurangi `leave_balances`.
+- Approve validasi saldo cuti annual_leave.
+- Approve validasi overlap dengan leave approved lain.
+- Bug `shift_id` default sudah diperbaiki dengan isi shift/location employee.
+- Controller menangkap RuntimeException dan menampilkan error ke UI.
+
+#### Kurang
+- Tidak ada filter status/tanggal/departemen di HRD list.
+- Tidak ada attachment display.
+- Tidak memakai `approvals` table.
+- Tidak mencatat `activity_logs`.
+- Proses approve multi-table belum dibungkus `DB::transaction`.
+- Validasi saldo cuti belum memakai lock row, rawan race condition jika approval bersamaan.
+- Reject tidak cek status pending; request yang sudah approved mungkin masih bisa di-reject jika route dipanggil langsung.
+
+### 4.8 Attendance Correction Approval HRD
+
+#### Sudah ada dan berfungsi sebagian
+- List, detail, approve, reject aktif.
+- Approve create/update attendance.
+- Attendance log action `update_by_hrd` dibuat.
+- Approve koreksi hitung ulang `late_minutes`, `total_work_minutes`, `early_leave_minutes`, dan status present/late.
+- Controller menangkap RuntimeException dan menampilkan error ke UI.
+
+#### Kurang
+- Tidak memakai `approvals` table.
+- Tidak ada filter status/tanggal/departemen di list.
+- Tidak ada attachment display.
+- Tidak mencatat `activity_logs`.
+- Perubahan check-in/out tidak menghitung ulang jarak/GPS karena koreksi hanya jam.
+- Approve/reject correction belum cek status pending; request lama bisa diproses ulang jika route dipanggil langsung.
+- Proses approve multi-table belum dibungkus `DB::transaction`.
+
+### 4.9 Employee Schedules HRD
+
+#### Sudah ada dan berfungsi sebagai read-only
+- Route aktif.
+- List jadwal karyawan mobile-first/table desktop.
+- Day off schedule sekarang dipakai untuk exclude HRD Belum Check-in.
+
+#### Kurang
+- Tidak ada create/update/delete schedule.
+- Tidak jelas siapa yang mengelola data schedule karena Admin route juga belum ada.
+- Employee attendance belum memakai schedule harian sebagai sumber utama.
+
+### 4.10 Leave Balances HRD
+
+#### Sudah ada dan berfungsi sebagai read-only
+- Route aktif.
+- List saldo cuti mobile-first/table desktop.
+- Annual leave submit dan approval sekarang membaca saldo.
+- Annual leave approval sekarang mengurangi saldo.
+
+#### Kurang
+- Tidak ada create/update/import saldo cuti.
+- Tidak ada UI HRD/Admin untuk koreksi saldo.
+- Belum ada mekanisme mengembalikan saldo jika leave approved dibatalkan pada future flow.
+
+### 4.11 Reports HRD
+
+#### Daily Report sudah ada
+- Route page aktif.
+- Filter date dan department.
+- CSV export aktif.
+
+#### Daily Report kurang
+- BRD minta kolom employee number, position, work location, shift, work mode, inside/outside radius, approval status; export saat ini hanya date, employee, department, check in/out, late, status.
+- Filter work location, shift, status, work mode, employee keyword belum ada di report view.
+- Export Excel asli belum ada; hanya CSV.
+
+#### Monthly Report sudah ada
+- Route page aktif.
+- Generate summary aktif.
+- CSV export aktif.
+
+#### Monthly Report kurang
+- Summary tidak memasukkan employee number/position di export.
+- Export kurang total work days, total absent, total late minutes, total early leave minutes.
+- Generate summary masih memakai `uuid` di `updateOrCreate`, sehingga existing summary berpotensi ganti uuid setiap generate.
+- Export Excel asli belum ada; hanya CSV.
+
+## 5. Database / Model / Infrastructure
+
+### Sudah ada
+- Tabel inti absensi/HR sudah lengkap: employees, shifts, work_locations, attendances, logs, leave, correction, summaries, approvals, activity_logs.
+- Repository binding banyak model aktif sudah ada.
+- Manual soft delete trait ada.
+- Attachment security service ada untuk encrypted profile/attachment preview.
+- `Attendance` sudah punya relasi `checkInPhoto` dan `checkOutPhoto`.
+- `leave_request_details` sekarang dipakai saat HRD approve leave.
+- `leave_balances` sekarang dipakai untuk validasi dan pengurangan annual leave.
+
+### Kurang / belum dipakai penuh
+- `approvals` table belum dipakai flow approval.
+- `activity_logs` belum dipakai konsisten untuk aksi penting.
+- Attendance photo masih public storage biasa, belum encrypted/private storage seperti profile.
+- Approval/correction/leave multi-table belum transaction-safe penuh.
+- Repository pattern belum konsisten pada service Employee/HRD; masih banyak query model langsung.
+
+## 6. API / Export / Attachment
+
+### Sudah ada dan berfungsi
+- Auth API login/logout.
+- HRD daily/monthly CSV export.
+- Signed attachment preview internal.
+- HRD attendance detail memakai signed preview URL untuk foto attendance.
+
+### Kurang
+- Export belum Excel native.
+- Export column/filter belum sesuai BRD penuh.
+- Tidak ada API untuk calendar events khusus; calendar embed data server-rendered.
+- Attachment upload leave/correction belum ada.
+- Employee attendance detail belum terlihat memakai signed preview foto attendance.
+
+## 7. UX / Mobile
+
+### Sudah baik
+- Employee module mayoritas mobile-first.
+- HRD module baru dibuat mobile-first dengan card list mobile + table desktop.
+- Work location form map interaktif.
+- Employee attendance form dengan kamera/GPS/map read-only.
+- HRD attendance detail sekarang menampilkan foto selfie.
+
+### Kurang
+- Admin module belum seluruhnya mobile-first.
+- Sidebar/menu label masih banyak English.
+- Outside radius frontend perlu dipastikan menandai work mode + note wajib sebelum submit.
+- Some empty state/actions masih bisa dipoles agar lebih non-teknikal.
+
+## 8. Testing / Quality
+
+### Sudah dicek pada revisi terakhir
+- `php -l app/Services/Employee/EmployeePortalService.php` lolos.
+- `php -l app/Services/Hrd/HrdService.php` lolos.
+- `php -l app/Models/Attendance.php` lolos.
+- `php -l app/Http/Controllers/Web/Hrd/LeaveRequestController.php` lolos.
+- `php -l app/Http/Controllers/Web/Hrd/AttendanceCorrectionController.php` lolos.
+- `CACHE_STORE=array php artisan view:cache` lolos.
+
+### Masalah diketahui
+- `php artisan test` sebelumnya gagal existing `Tests\Feature\ExampleTest::test_the_application_returns_a_successful_response`, expected 200 got 302.
+- `composer test` sebelumnya bermasalah karena script `@no_additional_args`.
+- `npm run build` sebelumnya gagal karena `vite` tidak dikenali/terinstall.
+- Belum dilakukan QA manual browser untuk flow revision.
+
+## 9. Prioritas Perbaikan Disarankan Berikutnya
+
+### Prioritas Tinggi
+1. Tambahkan `DB::transaction` untuk HRD approve leave dan approve correction.
+2. Tambahkan catch RuntimeException pada Employee leave/correction store agar overlap/saldo/duplikasi tampil sebagai error UI.
+3. Lengkapi HRD report kolom dan filter sesuai BRD.
+4. Tambah filter HRD leave requests dan attendance corrections.
+5. Perbaiki monthly summary agar UUID existing tidak berubah saat generate ulang.
+6. Tambah upload attachment untuk leave request dan attendance correction.
+7. Employee attendance detail tampilkan foto selfie via signed preview.
+
+### Prioritas Menengah
+1. Activity logs untuk login, CRUD admin, check-in/out, leave/correction submit/cancel, approval HRD, profile update.
+2. Approval table dipakai sebagai audit approval terpusat.
+3. Outside radius reject dibuat jelas: status review terpisah atau approvals table.
+4. Admin employee detail route/view.
+5. Admin/HRD schedule management.
+6. Admin/HRD leave balance management/import.
+7. Employee attendance memakai `employee_schedules` sebagai sumber shift harian.
+8. Mobile-first Admin views.
+
+### Prioritas Rendah / Later
+1. Settings UI.
+2. References UI.
+3. Roles/users management UI.
+4. Employee Work Locations multi-location UI.
+5. Export Excel native `.xlsx`.
+6. Notifications/email/push.
+7. Password reset dan session/device management.
+
+## 10. Status Matrix Singkat
+
+| Modul/Fitur | Status | Catatan |
+|---|---|---|
+| Auth login/logout | Sudah berfungsi | Role redirect aktif |
+| Role access Admin/HRD/Employee | Sudah berfungsi | Employee sudah internal |
+| Admin dashboard | Ada, basic | Perlu insight |
+| Admin departments | Sudah berfungsi | CRUD dasar |
+| Admin positions | Sudah berfungsi | CRUD dasar |
+| Admin work locations | Sudah berfungsi | Map Leaflet ada |
+| Admin shifts | Sudah berfungsi | Overnight perlu QA |
+| Admin holidays | Sudah berfungsi | Belum memblokir absen Employee saat holiday |
+| Admin employees | Sudah berfungsi | Detail belum ada |
+| Admin settings/references/roles/users/activity logs | Belum ada | Target later/system |
+| Employee dashboard | Sudah berfungsi | Mobile-first |
+| Employee check-in | Sudah berfungsi lebih lengkap | Outside work mode+note wajib, late status otomatis, foto masih public |
+| Employee check-out | Sudah berfungsi lebih lengkap | Early leave dihitung, outside work mode+note wajib |
+| Employee history/detail | Sudah berfungsi sebagian | Relasi foto diload, view foto Employee belum terlihat |
+| Employee calendar | Sudah berfungsi | Warna late perlu disesuaikan dengan late_minutes setelah tolerance |
+| Employee leave request | Sudah berfungsi sebagian | Overlap/saldo/cancel status ada; attachment dan store error handling kurang |
+| Employee correction | Sudah berfungsi sebagian | Duplikasi pending/cancel status ada; attachment dan policy tanggal kurang |
+| Employee profile | Sudah berfungsi | Encrypted profile photo |
+| HRD dashboard | Sudah berfungsi | Mobile-first |
+| HRD attendance monitoring | Sudah berfungsi sebagian | Filter view belum lengkap |
+| HRD not checked-in | Lebih lengkap | Holiday/day off/approved leave sudah dikecualikan |
+| HRD incomplete/late/outside | Sudah ada | Outside reject/flag belum jelas |
+| HRD leave approval | Lebih lengkap | Details/balance ada; transaction/approval table/activity log kurang |
+| HRD correction approval | Lebih lengkap | Metrics/status recalculated; transaction/approval table/activity log kurang |
+| HRD schedules | Read-only | Day off dipakai untuk not checked-in |
+| HRD leave balances | Read-only + terhubung rule | Annual leave validasi dan reduce saldo sudah ada |
+| Daily report/export | Ada sebagian | CSV, kolom/filter kurang |
+| Monthly report/export | Ada sebagian | CSV, kolom/filter kurang, UUID generate masih risk |
+| Attachment preview | Sudah berfungsi | Profile dan HRD attendance photos; Employee attendance photo view belum ada |
+| Activity logs | Belum dipakai penuh | Table/model ada |
+| Approvals table | Belum dipakai | Flow update langsung |

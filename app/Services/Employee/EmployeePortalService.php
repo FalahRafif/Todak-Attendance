@@ -9,6 +9,7 @@ use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Holiday;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDetail;
 use App\Models\Reference;
 use App\Models\User;
 use App\Services\AttachmentSecurityService;
@@ -25,8 +26,9 @@ class EmployeePortalService
     public function dashboardData(): array
     {
         $employee = $this->employee();
+        $leaveBalance = $this->annualLeaveBalance($employee);
 
-        return ['title' => 'Dashboard Karyawan', 'employee' => $employee, 'todayAttendance' => $this->todayAttendance(), 'monthlyAttendances' => $this->historyQuery()->whereBetween('attendance_date', [now()->startOfWeek(), now()->endOfWeek()])->limit(7)->get(), 'pendingLeaves' => LeaveRequest::query()->where('employee_id', $employee->id)->where('status_id', $this->approvalStatusId('pending'))->count(), 'pendingCorrections' => AttendanceCorrectionRequest::query()->where('employee_id', $employee->id)->where('status_id', $this->approvalStatusId('pending'))->count()];
+        return ['title' => 'Dashboard Karyawan', 'employee' => $employee, 'todayAttendance' => $this->todayAttendance(), 'monthlyAttendances' => $this->historyQuery()->whereBetween('attendance_date', [now()->startOfWeek(), now()->endOfWeek()])->limit(7)->get(), 'pendingLeaves' => LeaveRequest::query()->where('employee_id', $employee->id)->where('status_id', $this->approvalStatusId('pending'))->count(), 'pendingCorrections' => AttendanceCorrectionRequest::query()->where('employee_id', $employee->id)->where('status_id', $this->approvalStatusId('pending'))->count(), 'leaveBalance' => $leaveBalance];
     }
 
     public function attendanceData(): array
@@ -50,9 +52,10 @@ class EmployeePortalService
         DB::transaction(function () use ($employee, $payload, $request): void {
             $distance = $this->distanceToWorkLocation($employee, (float) $payload['latitude'], (float) $payload['longitude']);
             $inside = $this->isInsideRadius($employee, $distance);
-            $this->ensureOutsideRadiusNote($inside, $payload['note'] ?? null);
+            $this->ensureOutsideRadiusContext($inside, $payload['work_mode_id'] ?? null, $payload['note'] ?? null);
             $attachmentId = $this->storeCameraPhoto($payload['photo_data'], 'check-in');
-            $attendance = Attendance::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $employee->id, 'shift_id' => $employee->shift_id, 'work_location_id' => $employee->work_location_id, 'attendance_date' => today(), 'check_in_at' => now(), 'check_in_photo_attachment_id' => $attachmentId, 'check_in_latitude' => $payload['latitude'], 'check_in_longitude' => $payload['longitude'], 'check_in_distance_meter' => $distance, 'check_in_gps_accuracy_meter' => $payload['gps_accuracy_meter'] ?? null, 'check_in_is_inside_radius' => $inside, 'check_in_work_mode_id' => $payload['work_mode_id'] ?? null, 'check_in_note' => $payload['note'] ?? null, 'check_in_device_info' => $request->userAgent(), 'late_minutes' => $this->lateMinutes($employee), 'status_id' => $this->requiredAttendanceStatusId('present'), 'is_need_approval' => ! $inside, 'created_by' => auth()->id()]);
+            $lateMinutes = $this->lateMinutes($employee);
+            $attendance = Attendance::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $employee->id, 'shift_id' => $employee->shift_id, 'work_location_id' => $employee->work_location_id, 'attendance_date' => today(), 'check_in_at' => now(), 'check_in_photo_attachment_id' => $attachmentId, 'check_in_latitude' => $payload['latitude'], 'check_in_longitude' => $payload['longitude'], 'check_in_distance_meter' => $distance, 'check_in_gps_accuracy_meter' => $payload['gps_accuracy_meter'] ?? null, 'check_in_is_inside_radius' => $inside, 'check_in_work_mode_id' => $payload['work_mode_id'] ?? null, 'check_in_note' => $payload['note'] ?? null, 'check_in_device_info' => $request->userAgent(), 'late_minutes' => $lateMinutes, 'status_id' => $this->requiredAttendanceStatusId($lateMinutes > 0 ? 'late' : 'present'), 'is_need_approval' => ! $inside, 'created_by' => auth()->id()]);
             $this->logAttendance($attendance, 'check_in', $payload, $attachmentId, $inside, $distance, $request);
         });
     }
@@ -72,9 +75,9 @@ class EmployeePortalService
         DB::transaction(function () use ($employee, $attendance, $payload, $request): void {
             $distance = $this->distanceToWorkLocation($employee, (float) $payload['latitude'], (float) $payload['longitude']);
             $inside = $this->isInsideRadius($employee, $distance);
-            $this->ensureOutsideRadiusNote($inside, $payload['note'] ?? null);
+            $this->ensureOutsideRadiusContext($inside, $payload['work_mode_id'] ?? null, $payload['note'] ?? null);
             $attachmentId = $this->storeCameraPhoto($payload['photo_data'], 'check-out');
-            $attendance->update(['check_out_at' => now(), 'check_out_photo_attachment_id' => $attachmentId, 'check_out_latitude' => $payload['latitude'], 'check_out_longitude' => $payload['longitude'], 'check_out_distance_meter' => $distance, 'check_out_gps_accuracy_meter' => $payload['gps_accuracy_meter'] ?? null, 'check_out_is_inside_radius' => $inside, 'check_out_work_mode_id' => $payload['work_mode_id'] ?? null, 'check_out_note' => $payload['note'] ?? null, 'check_out_device_info' => $request->userAgent(), 'total_work_minutes' => $attendance->check_in_at->diffInMinutes(now()), 'early_leave_minutes' => 0, 'is_need_approval' => $attendance->is_need_approval || ! $inside, 'updated_by' => auth()->id()]);
+            $attendance->update(['check_out_at' => now(), 'check_out_photo_attachment_id' => $attachmentId, 'check_out_latitude' => $payload['latitude'], 'check_out_longitude' => $payload['longitude'], 'check_out_distance_meter' => $distance, 'check_out_gps_accuracy_meter' => $payload['gps_accuracy_meter'] ?? null, 'check_out_is_inside_radius' => $inside, 'check_out_work_mode_id' => $payload['work_mode_id'] ?? null, 'check_out_note' => $payload['note'] ?? null, 'check_out_device_info' => $request->userAgent(), 'total_work_minutes' => max(0, $attendance->check_in_at->diffInMinutes(now(), false)), 'early_leave_minutes' => $this->earlyLeaveMinutes($employee, now()), 'is_need_approval' => $attendance->is_need_approval || ! $inside, 'updated_by' => auth()->id()]);
             $this->logAttendance($attendance->refresh(), 'check_out', $payload, $attachmentId, $inside, $distance, $request);
         });
     }
@@ -96,62 +99,89 @@ class EmployeePortalService
         if ($start->diffInMonths($end) > 2 || $end->lt($start)) {
             $end = $start->copy()->addMonths(2)->endOfMonth();
         }
-        $attendanceEvents = Attendance::query()
+        $attendances = Attendance::query()
             ->with(['shift', 'workLocation', 'status'])
             ->where('employee_id', $employee->id)
             ->whereDate('attendance_date', '>=', $start)
             ->whereDate('attendance_date', '<=', $end)
             ->orderBy('attendance_date')
-            ->get()
-            ->map(function (Attendance $attendance): array {
-                $lateTolerance = $attendance->shift?->late_tolerance_minutes ?? 0;
-                $outsideRadius = $attendance->check_in_is_inside_radius === false || $attendance->check_out_is_inside_radius === false;
-                $incomplete = $attendance->check_in_at !== null && $attendance->check_out_at === null;
-                $color = '#10b981';
-                if ($outsideRadius || $attendance->is_need_approval) {
-                    $color = '#f59e0b';
-                }
-                if ($attendance->late_minutes > $lateTolerance) {
-                    $color = '#ef4444';
-                }
-                if ($incomplete) {
-                    $color = '#6366f1';
-                }
+            ->get();
+        $attendanceDates = $attendances->pluck('attendance_date')->filter()->map(fn ($date): string => $date->format('Y-m-d'))->unique();
+        $attendanceEvents = $attendances->map(function (Attendance $attendance): array {
+            $lateTolerance = $attendance->shift?->late_tolerance_minutes ?? 0;
+            $outsideRadius = $attendance->check_in_is_inside_radius === false || $attendance->check_out_is_inside_radius === false;
+            $incomplete = $attendance->check_in_at !== null && $attendance->check_out_at === null;
+            $status = $attendance->status?->description;
+            $leaveStatus = in_array($status, ['leave', 'sick', 'permission'], true);
+            $color = '#10b981';
+            if ($leaveStatus) {
+                $color = '#8b5cf6';
+            }
+            if ($outsideRadius || $attendance->is_need_approval) {
+                $color = '#f59e0b';
+            }
+            if ($attendance->late_minutes > 0) {
+                $color = '#ef4444';
+            }
+            if ($incomplete) {
+                $color = '#6366f1';
+            }
 
-                $checkIn = $attendance->check_in_at;
-                $checkOut = $attendance->check_out_at;
-                $title = $incomplete ? 'Belum absen pulang' : friendly_label($attendance->status?->description);
+            $checkIn = $attendance->check_in_at;
+            $checkOut = $attendance->check_out_at;
+            $title = $incomplete ? 'Belum absen pulang' : friendly_label($status);
 
-                return ['id' => 'attendance-'.$attendance->id, 'title' => $title, 'start' => ($checkIn ?? $attendance->attendance_date?->startOfDay())?->toIso8601String(), 'end' => $checkOut?->toIso8601String(), 'allDay' => $checkIn === null, 'url' => route('employee.attendance.history.show', $attendance->id), 'backgroundColor' => $color, 'borderColor' => $color, 'extendedProps' => ['checkIn' => $attendance->check_in_at?->format('H:i') ?? '--:--', 'checkOut' => $attendance->check_out_at?->format('H:i') ?? '--:--', 'late' => $attendance->late_minutes, 'lateTolerance' => $lateTolerance, 'workMinutes' => $attendance->total_work_minutes, 'outsideRadius' => $outsideRadius, 'needApproval' => $attendance->is_need_approval, 'type' => 'attendance']];
-            });
+            if ($leaveStatus) {
+                return ['id' => 'attendance-'.$attendance->id, 'title' => $title, 'start' => $attendance->attendance_date?->format('Y-m-d'), 'allDay' => true, 'url' => route('employee.attendance.history.show', $attendance->id), 'backgroundColor' => $color, 'borderColor' => $color, 'extendedProps' => ['checkIn' => '--:--', 'checkOut' => '--:--', 'late' => 0, 'lateTolerance' => $lateTolerance, 'workMinutes' => 0, 'outsideRadius' => false, 'needApproval' => false, 'type' => 'leave_attendance']];
+            }
+
+            return ['id' => 'attendance-'.$attendance->id, 'title' => $title, 'start' => ($checkIn ?? $attendance->attendance_date?->startOfDay())?->toIso8601String(), 'end' => $checkOut?->toIso8601String(), 'allDay' => $checkIn === null, 'url' => route('employee.attendance.history.show', $attendance->id), 'backgroundColor' => $color, 'borderColor' => $color, 'extendedProps' => ['checkIn' => $attendance->check_in_at?->format('H:i') ?? '--:--', 'checkOut' => $attendance->check_out_at?->format('H:i') ?? '--:--', 'late' => $attendance->late_minutes, 'lateTolerance' => $lateTolerance, 'workMinutes' => $attendance->total_work_minutes, 'outsideRadius' => $outsideRadius, 'needApproval' => $attendance->is_need_approval, 'type' => 'attendance']];
+        });
         $holidayEvents = Holiday::query()
             ->whereDate('holiday_date', '>=', $start)
             ->whereDate('holiday_date', '<=', $end)
             ->orderBy('holiday_date')
             ->get()
             ->map(fn (Holiday $holiday): array => ['id' => 'holiday-'.$holiday->id, 'title' => $holiday->name, 'start' => $holiday->holiday_date?->format('Y-m-d'), 'allDay' => true, 'backgroundColor' => '#dc2626', 'borderColor' => '#dc2626', 'display' => 'block', 'extendedProps' => ['type' => 'holiday']]);
+        $leaveDetailEvents = LeaveRequestDetail::query()
+            ->with(['leaveRequest.leaveType'])
+            ->whereHas('leaveRequest', fn ($query) => $query->where('employee_id', $employee->id)->where('status_id', $this->approvalStatusId('approved')))
+            ->whereDate('leave_date', '>=', $start)
+            ->whereDate('leave_date', '<=', $end)
+            ->orderBy('leave_date')
+            ->get()
+            ->filter(fn (LeaveRequestDetail $detail): bool => ! $attendanceDates->contains($detail->leave_date?->format('Y-m-d')))
+            ->map(fn (LeaveRequestDetail $detail): array => ['id' => 'leave-detail-'.$detail->id, 'title' => friendly_label($detail->leaveRequest?->leaveType?->description), 'start' => $detail->leave_date?->format('Y-m-d'), 'allDay' => true, 'backgroundColor' => '#8b5cf6', 'borderColor' => '#8b5cf6', 'extendedProps' => ['type' => 'leave']]);
+        $leaveRequestIdsWithDetails = LeaveRequestDetail::query()->whereHas('leaveRequest', fn ($query) => $query->where('employee_id', $employee->id))->pluck('leave_request_id')->unique();
         $leaveEvents = LeaveRequest::query()
             ->with(['leaveType', 'status'])
             ->where('employee_id', $employee->id)
             ->where('status_id', $this->approvalStatusId('approved'))
+            ->whereNotIn('id', $leaveRequestIdsWithDetails)
             ->whereDate('start_date', '<=', $end)
             ->whereDate('end_date', '>=', $start)
             ->get()
-            ->flatMap(function (LeaveRequest $leave): array {
+            ->flatMap(function (LeaveRequest $leave) use ($attendanceDates): array {
                 $events = [];
                 foreach (Carbon::parse($leave->start_date)->daysUntil(Carbon::parse($leave->end_date)->addDay()) as $date) {
+                    if ($attendanceDates->contains($date->format('Y-m-d'))) {
+                        continue;
+                    }
                     $events[] = ['id' => 'leave-'.$leave->id.'-'.$date->format('Ymd'), 'title' => friendly_label($leave->leaveType?->description), 'start' => $date->format('Y-m-d'), 'allDay' => true, 'backgroundColor' => '#8b5cf6', 'borderColor' => '#8b5cf6', 'extendedProps' => ['type' => 'leave']];
                 }
 
                 return $events;
             });
 
-        return ['title' => 'Kalender Absensi', 'startDate' => $start, 'endDate' => $end, 'events' => $attendanceEvents->merge($holidayEvents)->merge($leaveEvents)->values()];
+        return ['title' => 'Kalender Absensi', 'startDate' => $start, 'endDate' => $end, 'events' => $attendanceEvents->merge($holidayEvents)->merge($leaveDetailEvents)->merge($leaveEvents)->values()];
     }
 
     public function attendanceDetailData(int $id): array
     {
-        return ['title' => 'Detail Absensi', 'item' => Attendance::query()->with(['shift', 'workLocation', 'status', 'logs'])->where('employee_id', $this->employee()->id)->findOrFail($id)];
+        $item = Attendance::query()->with(['shift', 'workLocation', 'status', 'logs', 'checkInPhoto', 'checkOutPhoto'])->where('employee_id', $this->employee()->id)->findOrFail($id);
+        $attachmentSecurityService = app(AttachmentSecurityService::class);
+
+        return ['title' => 'Detail Absensi', 'item' => $item, 'checkInPhotoUrl' => $attachmentSecurityService->generateTemporaryPreviewUrl($item->checkInPhoto), 'checkOutPhotoUrl' => $attachmentSecurityService->generateTemporaryPreviewUrl($item->checkOutPhoto)];
     }
 
     public function leaveListData(Request $request): array
@@ -169,7 +199,9 @@ class EmployeePortalService
 
     public function leaveFormData(): array
     {
-        return ['title' => 'Buat Pengajuan Izin/Cuti', 'leaveTypes' => Reference::query()->whereIn('description', ['annual_leave', 'sick_leave', 'permission'])->get()];
+        $employee = $this->employee();
+
+        return ['title' => 'Buat Pengajuan Izin/Cuti', 'leaveTypes' => Reference::query()->whereIn('description', ['annual_leave', 'sick_leave', 'permission'])->get(), 'leaveBalance' => $this->annualLeaveBalance($employee)];
     }
 
     public function leaveDetailData(int $id): array
@@ -181,7 +213,11 @@ class EmployeePortalService
     {
         $start = Carbon::parse($payload['start_date']);
         $end = Carbon::parse($payload['end_date']);
-        LeaveRequest::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $this->employee()->id, 'leave_type_id' => $payload['leave_type_id'], 'start_date' => $start, 'end_date' => $end, 'total_days' => $start->diffInDays($end) + 1, 'reason' => $payload['reason'], 'status_id' => $this->approvalStatusId('pending'), 'created_by' => auth()->id()]);
+        $employee = $this->employee();
+        $this->ensureNoOverlappingLeave($employee->id, $start, $end);
+        $this->ensureLeaveBalanceEnough($employee->id, (int) $payload['leave_type_id'], $start->year, $start->diffInDays($end) + 1);
+        $this->ensureSameYearLeave($start, $end, (int) $payload['leave_type_id']);
+        LeaveRequest::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $employee->id, 'leave_type_id' => $payload['leave_type_id'], 'start_date' => $start, 'end_date' => $end, 'total_days' => $start->diffInDays($end) + 1, 'reason' => $payload['reason'], 'status_id' => $this->approvalStatusId('pending'), 'created_by' => auth()->id()]);
     }
 
     public function cancelLeave(int $id): void
@@ -190,7 +226,7 @@ class EmployeePortalService
         if ($item->status_id !== $this->approvalStatusId('pending')) {
             throw new RuntimeException('Hanya pengajuan yang masih menunggu persetujuan yang bisa dibatalkan.');
         }
-        $item->delete();
+        $item->update(['status_id' => $this->approvalStatusId('cancelled'), 'updated_by' => auth()->id()]);
     }
 
     public function correctionListData(Request $request): array
@@ -217,6 +253,13 @@ class EmployeePortalService
 
     public function createCorrection(array $payload): void
     {
+        $employeeId = $this->employee()->id;
+        $pendingStatusId = $this->approvalStatusId('pending');
+        $exists = AttendanceCorrectionRequest::query()->where('employee_id', $employeeId)->whereDate('correction_date', $payload['correction_date'])->where('status_id', $pendingStatusId)->exists();
+        if ($exists) {
+            throw new RuntimeException('Koreksi pending untuk tanggal ini sudah ada.');
+        }
+
         AttendanceCorrectionRequest::query()->create(['uuid' => (string) Str::uuid(), 'employee_id' => $this->employee()->id, 'correction_date' => $payload['correction_date'], 'requested_check_in_at' => $payload['requested_check_in_at'] ?? null, 'requested_check_out_at' => $payload['requested_check_out_at'] ?? null, 'reason' => $payload['reason'], 'status_id' => $this->approvalStatusId('pending'), 'created_by' => auth()->id()]);
     }
 
@@ -226,7 +269,7 @@ class EmployeePortalService
         if ($item->status_id !== $this->approvalStatusId('pending')) {
             throw new RuntimeException('Hanya pengajuan yang masih menunggu persetujuan yang bisa dibatalkan.');
         }
-        $item->delete();
+        $item->update(['status_id' => $this->approvalStatusId('cancelled'), 'updated_by' => auth()->id()]);
     }
 
     public function profileData(): array
@@ -306,9 +349,19 @@ class EmployeePortalService
         $this->requiredAttachmentImageTypeId();
     }
 
-    private function ensureOutsideRadiusNote(bool $inside, ?string $note): void
+    private function ensureOutsideRadiusContext(bool $inside, ?int $workModeId, ?string $note): void
     {
-        if (! $inside && blank($note)) {
+        if ($inside) {
+            return;
+        }
+        if ($workModeId === null) {
+            throw new RuntimeException('Mode kerja wajib dipilih jika berada di luar radius lokasi kerja.');
+        }
+        $workMode = Reference::query()->whereKey($workModeId)->first();
+        if ($workMode?->group_id !== 'WORK_MODE' || $workMode?->description === 'office') {
+            throw new RuntimeException('Mode kerja luar radius tidak valid.');
+        }
+        if (blank($note)) {
             throw new RuntimeException('Catatan wajib diisi jika berada di luar radius lokasi kerja.');
         }
     }
@@ -345,8 +398,60 @@ class EmployeePortalService
             return 0;
         }
         $start = Carbon::parse(today()->format('Y-m-d').' '.$employee->shift->start_time);
+        $start->addMinutes((int) ($employee->shift->late_tolerance_minutes ?? 0));
 
         return max(0, $start->diffInMinutes(now(), false));
+    }
+
+    private function earlyLeaveMinutes(Employee $employee, Carbon $checkOutAt): int
+    {
+        if ($employee->shift?->end_time === null) {
+            return 0;
+        }
+        $shiftEnd = Carbon::parse(today()->format('Y-m-d').' '.$employee->shift->end_time);
+        if ($employee->shift->is_overnight) {
+            $shiftEnd->addDay();
+        }
+
+        return max(0, $checkOutAt->diffInMinutes($shiftEnd, false));
+    }
+
+    private function ensureNoOverlappingLeave(int $employeeId, Carbon $start, Carbon $end, ?int $ignoreId = null): void
+    {
+        $blockedStatuses = array_filter([$this->approvalStatusId('pending'), $this->approvalStatusId('approved')]);
+        $exists = LeaveRequest::query()
+            ->where('employee_id', $employeeId)
+            ->when($ignoreId !== null, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->whereIn('status_id', $blockedStatuses)
+            ->whereDate('start_date', '<=', $end)
+            ->whereDate('end_date', '>=', $start)
+            ->exists();
+        if ($exists) {
+            throw new RuntimeException('Tanggal pengajuan overlap dengan pengajuan lain yang masih pending/approved.');
+        }
+    }
+
+    private function ensureLeaveBalanceEnough(int $employeeId, int $leaveTypeId, int $year, int $days): void
+    {
+        $leaveType = Reference::query()->find($leaveTypeId);
+        if ($leaveType?->description !== 'annual_leave') {
+            return;
+        }
+        $remaining = \App\Models\LeaveBalance::query()->where('employee_id', $employeeId)->where('leave_type_id', $leaveTypeId)->where('year', $year)->value('remaining_quota');
+        if ($remaining === null || (int) $remaining < $days) {
+            throw new RuntimeException('Saldo cuti tahunan tidak cukup.');
+        }
+    }
+
+    private function ensureSameYearLeave(Carbon $start, Carbon $end, int $leaveTypeId): void
+    {
+        $leaveType = Reference::query()->find($leaveTypeId);
+        if ($leaveType?->description !== 'annual_leave') {
+            return;
+        }
+        if ($start->year !== $end->year) {
+            throw new RuntimeException('Cuti tahunan lintas tahun belum didukung. Silakan ajukan terpisah per tahun.');
+        }
     }
 
     private function storeProfilePhoto($file): int
@@ -372,7 +477,21 @@ class EmployeePortalService
 
     private function approvalStatuses()
     {
-        return Reference::query()->whereIn('description', ['pending', 'approved', 'rejected'])->orderBy('description')->get();
+        return Reference::query()->whereIn('description', ['pending', 'approved', 'rejected', 'cancelled'])->orderBy('description')->get();
+    }
+
+    private function annualLeaveBalance(Employee $employee): ?\App\Models\LeaveBalance
+    {
+        $annualLeaveTypeId = Reference::query()->where('description', 'annual_leave')->value('id');
+        if ($annualLeaveTypeId === null) {
+            return null;
+        }
+
+        return \App\Models\LeaveBalance::query()
+            ->where('employee_id', $employee->id)
+            ->where('leave_type_id', $annualLeaveTypeId)
+            ->where('year', now()->year)
+            ->first();
     }
 
     private function approvalStatusId(string $description): ?int

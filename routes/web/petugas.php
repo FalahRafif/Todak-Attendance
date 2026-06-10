@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\Web\Hrd\ActivityCalendarController;
 use App\Http\Controllers\Web\Hrd\AttendanceCorrectionController;
 use App\Http\Controllers\Web\Hrd\Attendances\AttendanceApprovalController;
 use App\Http\Controllers\Web\Hrd\Attendances\AttendanceIndexController;
+use App\Http\Controllers\Web\Hrd\Attendances\AttendanceMapController;
 use App\Http\Controllers\Web\Hrd\Attendances\AttendanceShowController;
 use App\Http\Controllers\Web\Hrd\Attendances\IncompleteAttendanceController;
 use App\Http\Controllers\Web\Hrd\Attendances\LateAttendanceController;
@@ -24,6 +26,8 @@ Route::prefix('hrd')->name('hrd.')->middleware(['auth', 'role:HRD'])->group(func
     Route::get('/attendances/incomplete', IncompleteAttendanceController::class)->name('attendances.incomplete');
     Route::get('/attendances/late', LateAttendanceController::class)->name('attendances.late');
     Route::get('/attendances/outside-radius', OutsideRadiusAttendanceController::class)->name('attendances.outside-radius');
+    Route::get('/attendances/map', AttendanceMapController::class)->name('attendances.map');
+    Route::get('/activity-calendar', ActivityCalendarController::class)->name('activity-calendar');
     Route::get('/attendances/{id}', AttendanceShowController::class)->name('attendances.show');
     Route::post('/attendances/{id}/approve', [AttendanceApprovalController::class, 'approve'])->name('attendances.approve');
     Route::post('/attendances/{id}/reject', [AttendanceApprovalController::class, 'reject'])->name('attendances.reject');
@@ -36,7 +40,9 @@ Route::prefix('hrd')->name('hrd.')->middleware(['auth', 'role:HRD'])->group(func
     Route::post('/attendance-corrections/{id}/approve', [AttendanceCorrectionController::class, 'approve'])->name('attendance-corrections.approve');
     Route::post('/attendance-corrections/{id}/reject', [AttendanceCorrectionController::class, 'reject'])->name('attendance-corrections.reject');
     Route::get('/employee-schedules', EmployeeScheduleController::class)->name('employee-schedules');
-    Route::get('/leave-balances', LeaveBalanceController::class)->name('leave-balances');
+    Route::get('/leave-balances', [LeaveBalanceController::class, 'index'])->name('leave-balances');
+    Route::post('/leave-balances/{id}/adjust', [LeaveBalanceController::class, 'adjust'])->name('leave-balances.adjust');
+    Route::post('/leave-balances/generate', [LeaveBalanceController::class, 'generate'])->name('leave-balances.generate');
     Route::get('/reports/daily-attendance', DailyAttendanceReportController::class)->name('reports.daily-attendance');
     Route::get('/reports/monthly-attendance', [MonthlyAttendanceReportController::class, 'index'])->name('reports.monthly-attendance');
     Route::post('/reports/monthly-attendance/generate', [MonthlyAttendanceReportController::class, 'generate'])->name('reports.monthly-attendance.generate');

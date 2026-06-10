@@ -23,7 +23,12 @@ class AttendanceCorrectionController extends Controller
 
     public function store(Request $request, EmployeePortalService $employeePortalService): RedirectResponse
     {
-        $employeePortalService->createCorrection($request->validate(['correction_date' => ['required', 'date'], 'requested_check_in_at' => ['nullable', 'date'], 'requested_check_out_at' => ['nullable', 'date'], 'reason' => ['required', 'string']]));
+        $payload = $request->validate(['correction_date' => ['required', 'date'], 'requested_check_in_at' => ['nullable', 'date'], 'requested_check_out_at' => ['nullable', 'date'], 'reason' => ['required', 'string']]);
+        try {
+            $employeePortalService->createCorrection($payload);
+        } catch (RuntimeException $exception) {
+            return back()->withInput()->with('error', $exception->getMessage());
+        }
 
         return redirect()->route('employee.attendance-corrections')->with('success', 'Attendance correction berhasil dibuat.');
     }

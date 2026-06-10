@@ -95,6 +95,16 @@ class Attendance extends Model
         return $this->belongsTo(Reference::class, 'status_id');
     }
 
+    public function checkInPhoto(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'check_in_photo_attachment_id');
+    }
+
+    public function checkOutPhoto(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'check_out_photo_attachment_id');
+    }
+
     public function logs(): HasMany
     {
         return $this->hasMany(AttendanceLog::class);

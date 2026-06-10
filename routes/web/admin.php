@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Web\Admin\DashboardController;
+use App\Http\Controllers\Web\Admin\Modules\ApplicationParameterController;
 use App\Http\Controllers\Web\Admin\Modules\DepartmentController;
 use App\Http\Controllers\Web\Admin\Modules\EmployeeController;
 use App\Http\Controllers\Web\Admin\Modules\HolidayController;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:Admin'])->group(function (): void {
     Route::redirect('/', '/admin/dashboard')->name('home');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/application-parameters', [ApplicationParameterController::class, 'index'])->name('application-parameters');
+    Route::post('/application-parameters/annual-leave-quota', [ApplicationParameterController::class, 'updateAnnualLeaveQuota'])->name('application-parameters.annual-leave-quota');
 
     Route::get('/departments', [DepartmentController::class, 'index'])->name('departments');
     Route::get('/departments/create', [DepartmentController::class, 'create'])->name('departments.create');

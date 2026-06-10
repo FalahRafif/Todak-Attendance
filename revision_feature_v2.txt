@@ -1,0 +1,1105 @@
+# REVISION FEATURE V2 - KLIKABSEN
+
+Tanggal review: 2026-06-10
+Tujuan dokumen: Instruksi revisi lanjutan untuk AI agent lokal berdasarkan hasil audit implementasi terakhir.
+Sumber analisis: check_feature(1).txt dan hasil evaluasi requirement KlikAbsen.
+
+====================================================================
+1. RINGKASAN STATUS TERBARU
+====================================================================
+
+Implementasi terbaru sudah mengalami banyak peningkatan dibanding audit sebelumnya.
+Core absensi sudah lebih matang dan beberapa business rule penting sudah diperbaiki.
+
+Fitur yang sudah berhasil direvisi:
+
+1. Outside radius pada check-in/check-out sudah wajib work_mode_id + note di backend.
+2. Outside radius menolak work mode office.
+3. Work mode dipastikan berasal dari reference group WORK_MODE.
+4. Check-in terlambat sudah mengubah status_id menjadi late.
+5. late_minutes sudah dihitung setelah toleransi shift.
+6. Check-out Employee sudah menghitung early_leave_minutes dari shift end.
+7. HRD Belum Check-in sudah mengecualikan holiday.
+8. HRD Belum Check-in sudah mengecualikan employee_schedules.is_day_off = true.
+9. HRD Belum Check-in sudah mengecualikan approved leave/sick/permission.
+10. Employee leave request sudah validasi overlap pending/approved.
+11. Employee annual leave sudah validasi sisa leave_balances saat submit.
+12. Leave cancel dan correction cancel sudah update status cancelled, bukan delete row.
+13. Employee correction sudah menolak duplikasi pending untuk employee + tanggal sama.
+14. HRD leave approval sudah membuat leave_request_details per tanggal.
+15. HRD leave approval sudah mengurangi leave_balances untuk annual leave.
+16. HRD correction approval sudah menghitung ulang late_minutes, total_work_minutes, early_leave_minutes, dan status present/late.
+17. HRD attendance detail sudah menampilkan foto check-in/check-out melalui signed preview URL.
+
+Status umum saat ini:
+
+- MVP Core KlikAbsen: sekitar 80-85% selesai.
+- Business rule utama: sekitar 75-85% selesai.
+- HRD reporting: sekitar 55-65% selesai.
+- Audit dan approval trail: sekitar 25-35% selesai.
+- Admin system module: sekitar 50-60% selesai.
+
+Kesimpulan:
+
+Sistem sudah jauh lebih siap untuk QA browser, tetapi belum production-ready karena masih ada kekurangan pada transaction safety, error handling, report/filter HRD, attachment leave/correction, activity log, approval audit, schedule management, dan leave balance management.
+
+====================================================================
+2. PRIORITAS TINGGI - WAJIB DIREVISI BERIKUTNYA
+====================================================================
+
+--------------------------------------------------------------------
+2.1 Tambahkan DB::transaction untuk HRD approve leave
+--------------------------------------------------------------------
+
+Masalah:
+
+Proses HRD approve leave melakukan beberapa operasi multi-table:
+
+- update leave_requests
+- insert leave_request_details
+- create/update attendances
+- update leave_balances untuk annual_leave
+
+Saat ini proses tersebut belum dipastikan dibungkus DB::transaction. Jika salah satu proses gagal di tengah, data bisa tidak konsisten.
+
+Instruksi revisi:
+
+1. Bungkus seluruh proses approve leave di HrdService dengan DB::transaction.
+2. Pastikan semua operasi approve berada dalam satu transaction.
+3. Jika salah satu proses gagal, rollback semua perubahan.
+4. Pastikan validasi status pending dilakukan di dalam transaction.
+5. Untuk annual_leave, lock leave_balances sebelum mengurangi saldo.
+
+Contoh pola:
+
+DB::transaction(function () use ($leaveRequestId, $payload) {
+    // ambil leave request
+    // validasi status pending
+    // validasi overlap
+    // jika annual leave, ambil leave balance dengan lockForUpdate()
+    // update leave request menjadi approved
+    // insert leave_request_details per tanggal
+    // create/update attendances per tanggal
+    // kurangi leave balance
+    // insert activity log / approval log jika sudah tersedia
+});
+
+Acceptance criteria:
+
+- Jika approve leave berhasil, semua tabel terkait berubah konsisten.
+- Jika gagal di tengah, tidak ada data parsial yang tersimpan.
+- Annual leave tidak bisa mengurangi saldo dua kali akibat race condition.
+- Approve leave yang sudah bukan pending harus ditolak.
+
+--------------------------------------------------------------------
+2.2 Tambahkan DB::transaction untuk HRD approve correction
+--------------------------------------------------------------------
+
+Masalah:
+
+Approve correction melakukan beberapa operasi:
+
+- update attendance_correction_requests
+- create/update attendances
+- insert attendance_logs
+- hitung ulang late_minutes, total_work_minutes, early_leave_minutes, status present/late
+
+Belum dipastikan transaction-safe.
+
+Instruksi revisi:
+
+1. Bungkus proses approve correction dengan DB::transaction.
+2. Validasi status correction harus pending di dalam transaction.
+3. Jika correction sudah approved/rejected/cancelled, route langsung harus ditolak.
+4. Insert attendance_logs hanya dilakukan jika update attendance berhasil.
+
+Acceptance criteria:
+
+- Correction pending bisa approved satu kali saja.
+- Correction yang sudah approved tidak bisa diproses ulang walau route ditembak langsung.
+- Jika update attendance gagal, correction tidak berubah menjadi approved.
+- Attendance log tidak tercipta jika approval gagal.
+
+--------------------------------------------------------------------
+2.3 Tambahkan lockForUpdate untuk leave_balances
+--------------------------------------------------------------------
+
+Masalah:
+
+Leave balance reduce belum idempotent dan rawan race condition jika dua approval annual leave berjalan bersamaan.
+
+Instruksi revisi:
+
+1. Saat approve annual_leave, ambil row leave_balances dengan lockForUpdate.
+2. Validasi remaining_quota di dalam lock.
+3. Kurangi saldo hanya setelah validasi berhasil.
+4. Jangan kurangi saldo jika leave request sudah bukan pending.
+
+Contoh pola:
+
+$balance = LeaveBalance::where('employee_id', $employeeId)
+    ->where('year', $year)
+    ->where('leave_type_id', $annualLeaveTypeId)
+    ->lockForUpdate()
+    ->first();
+
+Acceptance criteria:
+
+- Dua approval bersamaan tidak menyebabkan saldo minus.
+- Saldo hanya berkurang sekali untuk satu leave request.
+- Jika saldo tidak cukup, proses approve gagal dengan pesan bisnis yang jelas.
+
+--------------------------------------------------------------------
+2.4 Tambahkan catch RuntimeException di Employee leave store
+--------------------------------------------------------------------
+
+Masalah:
+
+Service Employee leave request sudah validasi overlap dan saldo, tetapi controller store belum pasti menangkap RuntimeException. Jika service melempar error bisnis, user berisiko melihat 500.
+
+Instruksi revisi:
+
+1. Tambahkan try/catch RuntimeException di Employee LeaveRequestController@store.
+2. Redirect back dengan input lama.
+3. Tampilkan pesan error yang user-friendly.
+4. Jangan tampilkan stack trace atau error teknis.
+
+Contoh pesan:
+
+- Tanggal pengajuan sudah digunakan pada pengajuan lain.
+- Saldo cuti tidak mencukupi.
+- Jenis cuti tidak valid.
+
+Acceptance criteria:
+
+- Jika saldo cuti tidak cukup, user kembali ke form dan melihat pesan error.
+- Jika tanggal overlap, user kembali ke form dan melihat pesan error.
+- Tidak ada error 500 untuk validasi bisnis.
+
+--------------------------------------------------------------------
+2.5 Tambahkan catch RuntimeException di Employee correction store
+--------------------------------------------------------------------
+
+Masalah:
+
+Service correction sudah menolak duplikasi pending untuk tanggal sama, tetapi controller store perlu memastikan error bisnis tidak menjadi 500.
+
+Instruksi revisi:
+
+1. Tambahkan try/catch RuntimeException di Employee AttendanceCorrectionController@store.
+2. Redirect back dengan input lama.
+3. Tampilkan pesan error jelas.
+
+Contoh pesan:
+
+- Masih ada pengajuan koreksi pending pada tanggal tersebut.
+- Tanggal koreksi tidak valid.
+- Koreksi hanya bisa diajukan maksimal X hari ke belakang.
+
+Acceptance criteria:
+
+- Duplikasi pending correction tidak menghasilkan 500.
+- User melihat pesan error yang jelas.
+
+--------------------------------------------------------------------
+2.6 Perbaiki monthly summary agar UUID tidak berubah saat generate ulang
+--------------------------------------------------------------------
+
+Masalah:
+
+Generate monthly summary masih memakai uuid di update payload pada updateOrCreate. Ini bisa membuat UUID existing berubah setiap generate ulang.
+
+Instruksi revisi:
+
+1. Jangan masukkan uuid ke update payload updateOrCreate.
+2. UUID hanya dibuat saat data summary baru dibuat.
+3. Gunakan key unik: employee_id + year + month.
+4. Pastikan unique constraint employee_id, year, month sudah ada.
+
+Pola yang benar:
+
+$summary = AttendanceMonthlySummary::firstOrNew([
+    'employee_id' => $employeeId,
+    'year' => $year,
+    'month' => $month,
+]);
+
+if (!$summary->exists) {
+    $summary->uuid = (string) Str::uuid();
+}
+
+$summary->fill([
+    'total_work_days' => ...,
+    'total_present' => ...,
+    // dst
+]);
+
+$summary->save();
+
+Acceptance criteria:
+
+- Generate summary pertama membuat UUID.
+- Generate ulang tidak mengubah UUID yang sudah ada.
+- Summary tetap update angka terbaru.
+
+====================================================================
+3. PRIORITAS TINGGI - REPORT DAN FILTER HRD
+====================================================================
+
+--------------------------------------------------------------------
+3.1 Lengkapi filter HRD attendance monitoring
+--------------------------------------------------------------------
+
+Masalah:
+
+Service mendukung beberapa filter, tetapi view HRD attendance belum lengkap.
+
+Instruksi revisi:
+
+Tambahkan filter pada halaman HRD attendance monitoring:
+
+1. Tanggal
+2. Employee keyword: nama / employee_number
+3. Department
+4. Position
+5. Work location
+6. Shift
+7. Status attendance
+8. Work mode
+9. Inside/outside radius
+10. Approval status / need approval
+
+Acceptance criteria:
+
+- HRD bisa filter data attendance berdasarkan status.
+- HRD bisa filter data outside radius.
+- HRD bisa filter berdasarkan work mode seperti WFH, business trip, outside meeting, client visit.
+- Filter harus tetap terbawa saat export CSV.
+
+--------------------------------------------------------------------
+3.2 Lengkapi filter HRD leave requests
+--------------------------------------------------------------------
+
+Masalah:
+
+HRD leave request list belum punya filter status/tanggal/departemen yang lengkap.
+
+Instruksi revisi:
+
+Tambahkan filter:
+
+1. Status: pending, approved, rejected, cancelled
+2. Leave type: annual_leave, sick_leave, permission
+3. Start date dari
+4. Start date sampai
+5. Department
+6. Employee keyword
+
+Acceptance criteria:
+
+- HRD bisa melihat hanya leave pending.
+- HRD bisa mencari pengajuan berdasarkan employee.
+- HRD bisa filter pengajuan per department.
+- Filter tidak merusak pagination.
+
+--------------------------------------------------------------------
+3.3 Lengkapi filter HRD attendance corrections
+--------------------------------------------------------------------
+
+Masalah:
+
+HRD correction list belum punya filter status/tanggal/departemen yang lengkap.
+
+Instruksi revisi:
+
+Tambahkan filter:
+
+1. Status: pending, approved, rejected, cancelled
+2. Correction date dari
+3. Correction date sampai
+4. Department
+5. Employee keyword
+
+Acceptance criteria:
+
+- HRD bisa melihat hanya correction pending.
+- HRD bisa mencari correction per employee.
+- HRD bisa filter correction per periode.
+
+--------------------------------------------------------------------
+3.4 Lengkapi Daily Report sesuai BRD
+--------------------------------------------------------------------
+
+Masalah:
+
+Daily report sudah ada tetapi kolom belum lengkap.
+
+Instruksi revisi:
+
+Daily report harus memiliki minimal kolom:
+
+1. Date
+2. Employee Number
+3. Employee Name
+4. Department
+5. Position
+6. Work Location
+7. Shift
+8. Check-in Time
+9. Check-out Time
+10. Work Mode Check-in
+11. Work Mode Check-out
+12. Check-in Inside/Outside Radius
+13. Check-out Inside/Outside Radius
+14. Check-in Distance Meter
+15. Check-out Distance Meter
+16. Late Minutes
+17. Early Leave Minutes
+18. Total Work Minutes
+19. Attendance Status
+20. Need Approval
+21. Approval Note
+22. Check-in Note
+23. Check-out Note
+
+Filter daily report minimal:
+
+1. Date
+2. Department
+3. Employee keyword
+4. Work location
+5. Shift
+6. Status
+7. Work mode
+8. Inside/outside radius
+9. Need approval
+
+Acceptance criteria:
+
+- Data di page dan export konsisten.
+- Export membawa filter yang sama.
+- HRD bisa identifikasi telat, pulang cepat, outside radius, dan approval status dari report.
+
+--------------------------------------------------------------------
+3.5 Lengkapi Monthly Report sesuai BRD
+--------------------------------------------------------------------
+
+Masalah:
+
+Monthly report sudah ada tetapi export kurang lengkap.
+
+Instruksi revisi:
+
+Monthly report harus memiliki minimal kolom:
+
+1. Year
+2. Month
+3. Employee Number
+4. Employee Name
+5. Department
+6. Position
+7. Work Location
+8. Total Work Days
+9. Total Present
+10. Total Late
+11. Total Absent
+12. Total Sick
+13. Total Leave
+14. Total Permission
+15. Total Incomplete
+16. Total Outside Radius
+17. Total Work Minutes
+18. Total Late Minutes
+19. Total Early Leave Minutes
+20. Generated At
+
+Filter monthly report minimal:
+
+1. Year
+2. Month
+3. Department
+4. Employee keyword
+5. Work location
+
+Acceptance criteria:
+
+- Monthly summary page menampilkan data penting HRD.
+- Export CSV memiliki kolom lengkap.
+- Generate ulang tidak mengubah UUID existing.
+
+====================================================================
+4. PRIORITAS TINGGI - ATTACHMENT DAN FOTO
+====================================================================
+
+--------------------------------------------------------------------
+4.1 Tambahkan upload attachment untuk leave request
+--------------------------------------------------------------------
+
+Masalah:
+
+Tabel leave_requests sudah punya attachment_id, tetapi form Employee belum upload attachment pendukung.
+
+Instruksi revisi:
+
+1. Tambahkan input upload file pada Employee leave request create form.
+2. Simpan file ke attachments.
+3. Isi leave_requests.attachment_id.
+4. Tampilkan attachment di Employee leave detail.
+5. Tampilkan attachment di HRD leave detail.
+6. Preview harus memakai signed URL.
+7. Validasi tipe file.
+
+Tipe file yang disarankan:
+
+- jpg
+- jpeg
+- png
+- webp
+- pdf
+
+Batas ukuran awal:
+
+- Maksimal 2 MB atau 5 MB, sesuaikan standar project.
+
+Business rule awal:
+
+- Attachment optional untuk annual_leave dan permission.
+- Attachment optional atau bisa dibuat wajib untuk sick_leave berdasarkan setting berikutnya.
+
+Acceptance criteria:
+
+- Employee bisa upload dokumen saat mengajukan leave.
+- HRD bisa melihat dokumen saat approval.
+- File tidak bisa diakses sembarang user tanpa signed URL.
+
+--------------------------------------------------------------------
+4.2 Tambahkan upload attachment untuk attendance correction
+--------------------------------------------------------------------
+
+Masalah:
+
+Tabel attendance_correction_requests sudah punya attachment_id, tetapi form Employee belum upload attachment.
+
+Instruksi revisi:
+
+1. Tambahkan input upload file di form correction.
+2. Simpan ke attachments.
+3. Isi attendance_correction_requests.attachment_id.
+4. Tampilkan attachment di Employee correction detail.
+5. Tampilkan attachment di HRD correction detail.
+6. Preview memakai signed URL.
+
+Acceptance criteria:
+
+- Employee bisa melampirkan bukti meeting/surat tugas/screenshot.
+- HRD bisa melihat attachment sebelum approve/reject.
+
+--------------------------------------------------------------------
+4.3 Tampilkan foto selfie attendance pada Employee attendance detail
+--------------------------------------------------------------------
+
+Masalah:
+
+Relasi checkInPhoto dan checkOutPhoto sudah diload, HRD detail sudah tampil foto, tetapi Employee attendance detail belum terlihat menampilkan foto selfie.
+
+Instruksi revisi:
+
+1. Pada Employee attendance detail, tampilkan foto check-in jika ada.
+2. Tampilkan foto check-out jika ada.
+3. Gunakan signed preview URL.
+4. Jika foto tidak ada, tampilkan empty state yang jelas.
+
+Acceptance criteria:
+
+- Employee bisa melihat bukti foto check-in/check-out miliknya sendiri.
+- Employee tidak bisa melihat foto attendance milik employee lain.
+
+--------------------------------------------------------------------
+4.4 Evaluasi penyimpanan foto attendance
+--------------------------------------------------------------------
+
+Masalah:
+
+Foto attendance masih disimpan di public storage, walaupun preview HRD sudah lewat signed route.
+
+Instruksi revisi:
+
+Minimal:
+
+1. Jangan tampilkan direct public URL.
+2. Semua preview harus lewat signed route.
+3. Batasi akses hanya Admin, HRD, atau owner employee.
+
+Ideal:
+
+1. Pindahkan storage foto attendance ke private/encrypted storage seperti profile image.
+2. Gunakan AttachmentSecurityService atau service serupa.
+
+Acceptance criteria minimal:
+
+- URL public langsung tidak digunakan di view.
+- Preview foto attendance hanya bisa diakses oleh role yang berhak.
+
+====================================================================
+5. PRIORITAS MENENGAH - AUDIT, APPROVAL, DAN REVIEW STATUS
+====================================================================
+
+--------------------------------------------------------------------
+5.1 Gunakan activity_logs untuk aksi penting
+--------------------------------------------------------------------
+
+Masalah:
+
+Tabel activity_logs sudah ada, tetapi belum konsisten dipakai.
+
+Instruksi revisi:
+
+Catat activity log untuk aksi berikut:
+
+Auth:
+1. Login sukses
+2. Logout
+3. Login gagal jika ingin dicatat
+
+Admin:
+1. Create/update/delete department
+2. Create/update/delete position
+3. Create/update/delete work location
+4. Create/update/delete shift
+5. Create/update/delete holiday
+6. Create/update/delete employee
+
+Employee:
+1. Check-in
+2. Check-out
+3. Submit leave request
+4. Cancel leave request
+5. Submit attendance correction
+6. Cancel attendance correction
+7. Update profile
+
+HRD:
+1. Approve leave
+2. Reject leave
+3. Approve correction
+4. Reject correction
+5. Approve outside radius
+6. Reject outside radius
+7. Generate monthly report
+8. Export report jika perlu
+
+Acceptance criteria:
+
+- Setiap aksi penting masuk activity_logs.
+- Log menyimpan user_id, module, action, description, old_value/new_value jika relevan, ip_address, user_agent.
+- Log bisa dipakai untuk audit jika terjadi komplain absensi.
+
+--------------------------------------------------------------------
+5.2 Mulai gunakan approvals table sebagai audit approval terpusat
+--------------------------------------------------------------------
+
+Masalah:
+
+Tabel approvals sudah ada, tetapi flow approval masih langsung update tabel target.
+
+Instruksi revisi:
+
+Buat record approvals saat:
+
+1. HRD approve/reject leave request.
+2. HRD approve/reject attendance correction.
+3. HRD review outside radius attendance.
+
+Mapping:
+
+- approvable_type = leave_request / attendance_correction / outside_radius_attendance
+- approvable_id = id tabel target
+- requested_by = user_id employee
+- approved_by = user_id HRD
+- status_id = reference approval status
+- approval_level = 1
+- note = approval_note atau rejected_reason
+- approved_at = waktu approve/reject
+
+Acceptance criteria:
+
+- Setiap approval/reject memiliki record di approvals.
+- Data target tetap update seperti sekarang.
+- Approval history bisa ditelusuri dari approvals table.
+
+--------------------------------------------------------------------
+5.3 Perjelas reject outside radius
+--------------------------------------------------------------------
+
+Masalah:
+
+Reject outside radius masih belum memiliki status review terpisah. Report belum bisa membedakan outside radius approved vs rejected.
+
+Instruksi revisi opsi 1:
+
+Gunakan approvals table untuk menyimpan status review outside radius.
+
+Instruksi revisi opsi 2:
+
+Tambahkan field pada attendances:
+
+- outside_radius_review_status_id
+- outside_radius_reviewed_by
+- outside_radius_reviewed_at
+- outside_radius_review_note
+
+Status:
+
+- pending
+- approved
+- rejected
+
+Saran:
+
+Untuk MVP, gunakan approvals table terlebih dahulu agar tidak perlu ubah schema besar.
+
+Acceptance criteria:
+
+- HRD bisa approve outside radius.
+- HRD bisa reject outside radius.
+- Report bisa membedakan outside radius pending/approved/rejected.
+- Reject tidak hanya berupa catatan biasa.
+
+====================================================================
+6. PRIORITAS MENENGAH - SCHEDULE DAN LEAVE BALANCE MANAGEMENT
+====================================================================
+
+--------------------------------------------------------------------
+6.1 Employee attendance harus memakai employee_schedules sebagai prioritas
+--------------------------------------------------------------------
+
+Masalah:
+
+Attendance masih memakai shift default employee, belum memakai jadwal harian dari employee_schedules sebagai sumber utama.
+
+Instruksi revisi:
+
+Saat Employee membuka attendance today/check-in/check-out:
+
+1. Cek employee_schedules berdasarkan employee_id + tanggal hari ini.
+2. Jika schedule ditemukan dan is_day_off = true:
+   - tampilkan status day off
+   - default tombol absen disabled atau beri warning sesuai rule bisnis.
+3. Jika schedule ditemukan dan shift_id ada:
+   - gunakan shift dari employee_schedules.
+4. Jika schedule tidak ditemukan:
+   - fallback ke employees.shift_id.
+
+Acceptance criteria:
+
+- Jika schedule harian punya shift berbeda, check-in pakai shift schedule.
+- Perhitungan late dan early leave memakai shift schedule.
+- Jika schedule day off, employee tidak dianggap wajib absen.
+
+--------------------------------------------------------------------
+6.2 Buat Admin/HRD schedule management
+--------------------------------------------------------------------
+
+Masalah:
+
+Employee schedules sudah dipakai untuk exclude belum check-in, tetapi UI management belum ada. Saat ini HRD schedules read-only.
+
+Instruksi revisi:
+
+Tambahkan fitur schedule management untuk Admin atau HRD:
+
+1. List schedule per bulan.
+2. Filter employee, department, tanggal, shift.
+3. Create schedule.
+4. Edit schedule.
+5. Delete/cancel schedule.
+6. Set day off.
+7. Bulk generate schedule berdasarkan shift default employee.
+
+Acceptance criteria:
+
+- Admin/HRD bisa membuat jadwal employee.
+- Jadwal yang dibuat memengaruhi attendance today.
+- Jadwal day off memengaruhi HRD belum check-in.
+
+--------------------------------------------------------------------
+6.3 Buat Admin/HRD leave balance management
+--------------------------------------------------------------------
+
+Masalah:
+
+Leave balance sudah dipakai untuk validasi dan pengurangan annual leave, tetapi UI masih read-only. HRD tidak bisa input saldo awal atau koreksi saldo.
+
+Instruksi revisi:
+
+Tambahkan fitur leave balance management:
+
+1. List saldo cuti per employee/tahun.
+2. Create saldo cuti.
+3. Edit saldo cuti.
+4. Adjustment saldo cuti.
+5. Import saldo cuti CSV/Excel jika memungkinkan.
+6. History perubahan saldo jika sudah ada activity log.
+
+Acceptance criteria:
+
+- HRD bisa set saldo cuti awal karyawan.
+- HRD bisa koreksi saldo jika ada kesalahan.
+- Employee annual leave membaca saldo terbaru.
+
+====================================================================
+7. PRIORITAS MENENGAH - ADMIN MODULE
+====================================================================
+
+--------------------------------------------------------------------
+7.1 Tambahkan Admin employee detail route/view
+--------------------------------------------------------------------
+
+Masalah:
+
+Admin employees sudah ada CRUD, tetapi route detail GET /admin/employees/{id} target BRD belum ada.
+
+Instruksi revisi:
+
+Buat halaman detail employee berisi:
+
+1. Data user login
+2. Data employee
+3. Department
+4. Position
+5. Work location
+6. Shift default
+7. Employee type
+8. Join date/end date
+9. Status active
+10. Foto profil
+11. Ringkasan attendance terbaru jika memungkinkan
+
+Acceptance criteria:
+
+- Admin bisa melihat detail employee tanpa masuk edit mode.
+- Route aman role Admin.
+
+--------------------------------------------------------------------
+7.2 Tambahkan guard delete master data yang sedang dipakai
+--------------------------------------------------------------------
+
+Masalah:
+
+CRUD master sudah ada, tetapi delete perlu guard agar tidak merusak data yang masih dipakai.
+
+Instruksi revisi:
+
+Tambahkan guard untuk:
+
+1. Department yang masih dipakai employee/position.
+2. Position yang masih dipakai employee.
+3. Work location yang masih dipakai employee/attendance.
+4. Shift yang masih dipakai employee/attendance/schedule.
+5. Holiday bisa soft delete biasa.
+
+Acceptance criteria:
+
+- Master data yang masih dipakai tidak bisa dihapus sembarangan.
+- User mendapat pesan jelas.
+
+--------------------------------------------------------------------
+7.3 Rapikan label menu dan bahasa
+--------------------------------------------------------------------
+
+Masalah:
+
+Sidebar/menu wording masih campur English dan Indonesia.
+
+Instruksi revisi:
+
+Gunakan bahasa Indonesia konsisten untuk menu:
+
+- Dashboard
+- Data Karyawan
+- Departemen
+- Jabatan
+- Lokasi Kerja
+- Shift Kerja
+- Hari Libur
+- Absensi
+- Belum Check-in
+- Belum Check-out
+- Terlambat
+- Luar Radius
+- Pengajuan Cuti/Izin/Sakit
+- Koreksi Absensi
+- Laporan Harian
+- Laporan Bulanan
+- Jadwal Karyawan
+- Saldo Cuti
+- Profil
+
+Acceptance criteria:
+
+- Menu tidak campur English/Indonesia kecuali istilah teknis yang memang dipilih.
+
+====================================================================
+8. PRIORITAS RENDAH / LATER
+====================================================================
+
+Fitur berikut tidak wajib untuk MVP, tetapi bagus untuk versi lanjutan:
+
+1. Admin Settings UI.
+2. Admin References UI.
+3. Admin Roles UI.
+4. Admin Users UI terpisah dari employee.
+5. Admin Activity Logs UI.
+6. Employee Work Locations multi-location UI.
+7. Export Excel native .xlsx.
+8. Notifications email/push.
+9. Password reset.
+10. Session/device management.
+11. Mobile-first polishing semua halaman Admin.
+12. Dashboard chart/trend HRD.
+13. Report khusus per employee.
+14. Import employee massal.
+15. Integrasi payroll.
+
+====================================================================
+9. FLOW YANG PERLU KEPUTUSAN BISNIS
+====================================================================
+
+--------------------------------------------------------------------
+9.1 Absensi saat holiday
+--------------------------------------------------------------------
+
+Masalah:
+
+Holiday sudah tampil di calendar dan HRD belum check-in sudah exclude holiday, tetapi Employee check-in belum memblokir atau menandai khusus hari libur.
+
+Keputusan yang dibutuhkan:
+
+Apakah employee boleh absen saat holiday?
+
+Saran rule:
+
+1. Default: employee tidak wajib absen saat holiday.
+2. Jika tetap absen, simpan attendance dengan flag/catatan holiday attendance.
+3. Jika belum ada lembur/overtime, tampilkan warning: "Hari ini libur. Absensi tidak diwajibkan."
+
+Implementasi minimal:
+
+- Pada attendance today, tampilkan info holiday.
+- Tombol absen bisa disabled, atau tetap enabled dengan warning sesuai keputusan bisnis.
+
+--------------------------------------------------------------------
+9.2 Leave lintas tahun
+--------------------------------------------------------------------
+
+Masalah:
+
+Validasi kuota annual leave saat ini memakai tahun start_date. Jika cuti lintas tahun, saldo harus dihitung terpisah.
+
+Contoh:
+
+Cuti 30 Desember 2026 sampai 2 Januari 2027:
+
+- Tahun 2026: 2 hari
+- Tahun 2027: 2 hari
+
+Keputusan yang dibutuhkan:
+
+1. Apakah cuti lintas tahun diizinkan?
+2. Jika diizinkan, saldo harus dihitung per tahun.
+3. Jika tidak diizinkan, sistem harus menolak pengajuan lintas tahun.
+
+Saran MVP:
+
+- Tolak cuti annual_leave lintas tahun terlebih dahulu.
+- Tampilkan pesan: "Cuti tahunan lintas tahun belum didukung. Silakan ajukan terpisah per tahun."
+
+--------------------------------------------------------------------
+9.3 Policy maksimal koreksi absen
+--------------------------------------------------------------------
+
+Masalah:
+
+Correction belum punya policy maksimal tanggal, misalnya hanya boleh koreksi 7 hari ke belakang.
+
+Saran setting:
+
+ATTENDANCE_CORRECTION_MAX_DAYS = 7
+
+Rule:
+
+- Jika correction_date lebih dari 7 hari ke belakang, tolak pengajuan.
+- HRD/Admin bisa punya override jika dibutuhkan.
+
+--------------------------------------------------------------------
+9.4 Attendance photo storage
+--------------------------------------------------------------------
+
+Masalah:
+
+Foto attendance masih public storage.
+
+Keputusan:
+
+1. Tetap public storage dengan signed preview di view.
+2. Atau pindah ke private/encrypted storage.
+
+Saran:
+
+Karena foto attendance adalah foto wajah, lebih aman memakai private/encrypted storage seperti profile image.
+
+====================================================================
+10. QA CHECKLIST SETELAH REVISI
+====================================================================
+
+Jalankan QA manual browser setelah revisi Sprint 1 dan Sprint 2.
+
+Auth:
+
+[ ] Admin login dan redirect ke admin dashboard.
+[ ] HRD login dan redirect ke HRD dashboard.
+[ ] Employee login dan redirect ke employee dashboard.
+[ ] Role tidak bisa akses halaman role lain.
+
+Employee Attendance:
+
+[ ] Check-in dalam radius berhasil tanpa note khusus.
+[ ] Check-in luar radius tanpa work mode ditolak.
+[ ] Check-in luar radius tanpa note ditolak.
+[ ] Check-in luar radius dengan work mode WFH dan note berhasil.
+[ ] Check-in telat mengubah status menjadi late.
+[ ] Check-out menghitung total_work_minutes.
+[ ] Check-out lebih awal menghitung early_leave_minutes.
+[ ] Duplicate check-in ditolak.
+[ ] Duplicate check-out ditolak.
+[ ] Employee attendance detail menampilkan foto check-in/check-out.
+
+Leave Request:
+
+[ ] Employee submit annual leave dengan saldo cukup berhasil.
+[ ] Employee submit annual leave dengan saldo kurang ditolak tanpa 500.
+[ ] Employee submit leave overlap ditolak tanpa 500.
+[ ] Employee upload attachment leave berhasil.
+[ ] Employee cancel pending leave menjadi status cancelled.
+[ ] HRD approve leave membuat leave_request_details.
+[ ] HRD approve annual leave mengurangi leave_balances.
+[ ] HRD reject leave status menjadi rejected.
+[ ] Approve leave berjalan transaction-safe.
+
+Correction:
+
+[ ] Employee submit correction berhasil.
+[ ] Employee submit correction duplikasi pending ditolak tanpa 500.
+[ ] Employee upload attachment correction berhasil.
+[ ] Employee cancel pending correction menjadi status cancelled.
+[ ] HRD approve correction update/create attendance.
+[ ] HRD approve correction hitung ulang late/early/total/status.
+[ ] HRD reject correction status menjadi rejected.
+[ ] Approve correction berjalan transaction-safe.
+
+HRD Monitoring:
+
+[ ] HRD attendance filter status berjalan.
+[ ] HRD attendance filter work mode berjalan.
+[ ] HRD attendance filter inside/outside radius berjalan.
+[ ] Belum check-in exclude holiday.
+[ ] Belum check-in exclude day off.
+[ ] Belum check-in exclude approved leave.
+[ ] Outside radius detail menampilkan foto dan GPS.
+[ ] Outside radius approval/reject tercatat jelas.
+
+Reports:
+
+[ ] Daily report menampilkan kolom lengkap.
+[ ] Daily report export membawa filter.
+[ ] Monthly report menampilkan kolom lengkap.
+[ ] Monthly summary generate ulang tidak mengubah UUID.
+[ ] Monthly report export membawa filter.
+
+Audit:
+
+[ ] Activity log tercatat untuk check-in/check-out.
+[ ] Activity log tercatat untuk leave submit/cancel/approve/reject.
+[ ] Activity log tercatat untuk correction submit/cancel/approve/reject.
+[ ] Approval table tercatat untuk leave/correction/outside radius jika sudah diterapkan.
+
+Technical:
+
+[ ] php -l file PHP yang diedit lolos.
+[ ] artisan view:cache lolos.
+[ ] artisan route:list lolos.
+[ ] artisan test diperbaiki minimal tidak gagal karena redirect default 302 yang tidak sesuai test.
+[ ] npm run build diperbaiki atau dicatat dependensinya jika belum wajib.
+
+====================================================================
+11. URUTAN SPRINT DISARANKAN UNTUK AI AGENT LOCAL
+====================================================================
+
+Sprint Revisi 1 - Stabilitas dan Error Handling:
+
+1. DB::transaction untuk HRD approve leave.
+2. DB::transaction untuk HRD approve correction.
+3. lockForUpdate untuk leave_balances.
+4. catch RuntimeException di Employee leave store.
+5. catch RuntimeException di Employee correction store.
+6. Perbaiki UUID monthly summary.
+
+Sprint Revisi 2 - Report dan Filter HRD:
+
+1. Filter HRD attendance: status, work mode, inside/outside radius, approval.
+2. Filter HRD leave request.
+3. Filter HRD correction.
+4. Lengkapi daily report kolom dan export.
+5. Lengkapi monthly report kolom dan export.
+
+Sprint Revisi 3 - Attachment dan Foto:
+
+1. Upload attachment leave request.
+2. Upload attachment attendance correction.
+3. Preview attachment di Employee dan HRD detail.
+4. Employee attendance detail tampilkan foto check-in/check-out.
+5. Pastikan semua preview memakai signed route.
+
+Sprint Revisi 4 - Audit dan Approval:
+
+1. Implement activity_logs untuk aksi penting.
+2. Implement approvals table untuk leave.
+3. Implement approvals table untuk correction.
+4. Implement approvals table atau review status untuk outside radius.
+5. Buat Activity Logs UI jika waktu cukup.
+
+Sprint Revisi 5 - HR Management Lanjutan:
+
+1. Employee attendance memakai employee_schedules sebagai prioritas shift harian.
+2. Buat schedule management.
+3. Buat leave balance management.
+4. Buat Admin employee detail.
+5. Guard delete master data yang sedang dipakai.
+6. Rapikan menu dan mobile view Admin.
+
+====================================================================
+12. FINAL NOTE UNTUK AI AGENT LOCAL
+====================================================================
+
+Jangan mengulang pembuatan modul dari nol. Implementasi sekarang sudah memiliki struktur utama yang benar.
+Fokus revisi pada:
+
+1. Menjaga konsistensi data dengan DB::transaction.
+2. Menangani error bisnis agar tidak menjadi 500.
+3. Melengkapi report/filter HRD.
+4. Menambahkan attachment leave/correction.
+5. Memakai activity_logs dan approvals table.
+6. Menghubungkan schedule dan leave balance management.
+
+Jangan restore modul lama di luar domain KlikAbsen.
+Ikuti pola existing project:
+
+Controller -> Service -> Repository -> Model
+
+Setelah edit, jalankan minimal:
+
+1. php -l untuk file PHP yang diubah.
+2. artisan optimize:clear.
+3. artisan route:list.
+4. artisan view:cache jika mengubah Blade.
+5. QA manual browser untuk flow utama Employee dan HRD.

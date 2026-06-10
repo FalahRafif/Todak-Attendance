@@ -54,9 +54,16 @@ return [
             ],
         ],
         [
+            'section' => 'System',
+            'items' => [
+                ['label' => 'Parameter Aplikasi', 'route_name' => 'application-parameters', 'active' => ['application-parameters*'], 'roles' => [RoleName::Admin->value]],
+            ],
+        ],
+        [
             'section' => 'Monitoring Absensi',
             'items' => [
                 ['label' => 'Absensi Harian', 'route_name' => 'attendances', 'active' => ['attendances'], 'roles' => [RoleName::Hrd->value]],
+                ['label' => 'Activity Calendar', 'route_name' => 'activity-calendar', 'active' => ['activity-calendar'], 'roles' => [RoleName::Hrd->value]],
                 ['label' => 'Belum Check-in', 'route_name' => 'attendances.not-checked-in', 'active' => ['attendances.not-checked-in'], 'roles' => [RoleName::Hrd->value]],
                 ['label' => 'Belum Check-out', 'route_name' => 'attendances.incomplete', 'active' => ['attendances.incomplete'], 'roles' => [RoleName::Hrd->value]],
                 ['label' => 'Terlambat', 'route_name' => 'attendances.late', 'active' => ['attendances.late'], 'roles' => [RoleName::Hrd->value]],

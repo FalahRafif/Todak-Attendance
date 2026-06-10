@@ -19,6 +19,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'check_out_end_time',
     'late_tolerance_minutes',
     'is_overnight',
+    'applicable_days',
+    'custom_days',
     'is_active',
     'created_at',
     'created_by',
@@ -37,6 +39,8 @@ class Shift extends Model
         return [
             'late_tolerance_minutes' => 'integer',
             'is_overnight' => 'boolean',
+            'applicable_days' => 'string',
+            'custom_days' => 'array',
             'is_active' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',

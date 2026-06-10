@@ -7,6 +7,7 @@ use App\Repositories\Contracts\AttachmentRepositoryInterface;
 use App\Repositories\Contracts\DepartmentRepositoryInterface;
 use App\Repositories\Contracts\EmployeeRepositoryInterface;
 use App\Repositories\Contracts\EmployeeWorkLocationRepositoryInterface;
+use App\Repositories\Contracts\LeaveBalanceRepositoryInterface;
 use App\Repositories\Contracts\PositionRepositoryInterface;
 use App\Enums\RoleName;
 use App\Repositories\Contracts\ReferenceRepositoryInterface;
@@ -32,6 +33,7 @@ class EmployeeService
         private UserRepositoryInterface $userRepository,
         private RoleRepositoryInterface $roleRepository,
         private AttachmentRepositoryInterface $attachmentRepository,
+        private LeaveBalanceRepositoryInterface $leaveBalanceRepository,
         private AttachmentSecurityService $attachmentSecurityService
     ) {
     }
@@ -66,7 +68,10 @@ class EmployeeService
                 return $user;
             }
 
-            return $this->employeeRepository->create(array_merge($this->normalizeBooleans($this->employeePayload($payload), ['is_active']), ['uuid' => (string) Str::uuid(), 'user_id' => $user->id]));
+            $employee = $this->employeeRepository->create(array_merge($this->normalizeBooleans($this->employeePayload($payload), ['is_active']), ['uuid' => (string) Str::uuid(), 'user_id' => $user->id]));
+            $this->ensureDefaultLeaveBalance($employee);
+
+            return $employee;
         });
     }
 
@@ -87,7 +92,10 @@ class EmployeeService
 
             $employeePayload = $this->normalizeBooleans($this->employeePayload($payload), ['is_active']);
             if ($employee === null) {
-                return $this->employeeRepository->create(array_merge($employeePayload, ['uuid' => (string) Str::uuid(), 'user_id' => $id]));
+                $employee = $this->employeeRepository->create(array_merge($employeePayload, ['uuid' => (string) Str::uuid(), 'user_id' => $id]));
+                $this->ensureDefaultLeaveBalance($employee);
+
+                return $employee;
             }
 
             return $this->employeeRepository->update($employee, $employeePayload);
@@ -168,5 +176,33 @@ class EmployeeService
         }
 
         return $payload;
+    }
+
+    private function ensureDefaultLeaveBalance($employee): void
+    {
+        $annualLeaveType = $this->referenceRepository->query()->where('description', 'annual_leave')->first();
+        if ($annualLeaveType === null || $employee === null) {
+            return;
+        }
+        $year = now()->year;
+        $exists = $this->leaveBalanceRepository->query()
+            ->where('employee_id', $employee->id)
+            ->where('leave_type_id', $annualLeaveType->id)
+            ->where('year', $year)
+            ->exists();
+        if ($exists) {
+            return;
+        }
+        $quota = (int) (\App\Models\Setting::query()->where('group_id', 'attendance')->where('code', 'DEFAULT_ANNUAL_LEAVE_QUOTA')->value('value') ?? 12);
+        $this->leaveBalanceRepository->create([
+            'uuid' => (string) Str::uuid(),
+            'employee_id' => $employee->id,
+            'leave_type_id' => $annualLeaveType->id,
+            'year' => $year,
+            'total_quota' => $quota,
+            'used_quota' => 0,
+            'remaining_quota' => $quota,
+            'created_by' => auth()->id(),
+        ]);
     }
 }
