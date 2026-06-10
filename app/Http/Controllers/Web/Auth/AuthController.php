@@ -33,6 +33,6 @@ class AuthController extends Controller
             $this->authService->logout();
         }
 
-        return view('pages.auth.login', ['title' => 'Login - KlikAbsen Admin']);
+        return view('pages.auth.login', ['title' => 'Login - Todak Attendace Admin']);
     }
 }

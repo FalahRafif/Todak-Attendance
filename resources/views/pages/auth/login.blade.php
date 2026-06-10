@@ -1,6 +1,6 @@
 @extends('layouts.auth.auth')
 
-@section('title', $title ?? 'Login — KlikAbsen')
+@section('title', $title ?? 'Login — Todak Attendace')
 
 @push('styles')
 <style>
@@ -53,16 +53,18 @@
         text-transform: uppercase;
     }
 
-    .brand-mark {
-        display: inline-grid;
-        place-items: center;
-        width: 32px;
-        height: 32px;
-        border-radius: 11px;
-        background: #ffffff;
-        color: var(--primary);
-        font-weight: 900;
-        box-shadow: 0 16px 40px rgba(0,0,0,.18);
+    .brand-logo {
+        width: 34px;
+        height: 34px;
+        object-fit: contain;
+        filter: drop-shadow(0 12px 24px rgba(0,0,0,.18));
+    }
+
+    .login-logo {
+        width: 58px;
+        height: 58px;
+        object-fit: contain;
+        margin-bottom: 14px;
     }
 
     .brand-title {
@@ -322,8 +324,8 @@
     <section class="brand-panel">
         <div class="brand-content">
             <div class="brand-badge">
-                <span class="brand-mark">KA</span>
-                KlikAbsen Workforce System
+                <img class="brand-logo" src="{{ asset('assets/etherno/public/icon_trans_white_1.png') }}" alt="Todak Attendace">
+                Todak Attendace Workforce System
             </div>
             <h1 class="brand-title">Absensi kerja <span>lebih presisi.</span></h1>
             <p class="brand-copy">Kelola kehadiran karyawan, jadwal kerja, lokasi kantor, izin, cuti, dan approval HRD dalam satu panel profesional.</p>
@@ -346,8 +348,9 @@
 
     <section class="form-panel">
         <div class="login-card">
+            <img class="login-logo" src="{{ asset('assets/etherno/public/icon_trans_2.png') }}" alt="Todak Attendace">
             <div class="login-kicker">Secure Login</div>
-            <h2 class="login-title">Masuk ke KlikAbsen</h2>
+            <h2 class="login-title">Masuk ke Todak Attendace</h2>
             <p class="login-subtitle">Gunakan akun internal Anda untuk mengakses dashboard Admin atau HRD.</p>
 
             @if ($errors->any())
@@ -363,7 +366,7 @@
                 <div class="field-stack">
                     <div class="field">
                         <label for="email">Email</label>
-                        <input class="input" id="email" type="email" name="email" value="{{ old('email') }}" placeholder="admin@klikabsen.local" required autofocus>
+                        <input class="input" id="email" type="email" name="email" value="{{ old('email') }}" placeholder="admin@company.local" required autofocus>
                     </div>
                     <div class="field">
                         <label for="password">Password</label>
@@ -381,7 +384,7 @@
                 <button class="submit-btn" type="submit">Masuk Dashboard</button>
             </form>
 
-            <div class="login-note">Default dev: admin@klikabsen.local / password</div>
+            <div class="login-note">Gunakan akun internal yang sudah terdaftar.</div>
         </div>
     </section>
 </main>

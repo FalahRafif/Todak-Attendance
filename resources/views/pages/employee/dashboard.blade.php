@@ -50,6 +50,9 @@
         <div class="col-md-6"><a href="{{ route('employee.attendance.calendar') }}" class="ka-action-tile text-decoration-none"><div><strong>Kalender Absensi</strong><span>Lihat pola absen bulanan dan mingguan</span></div><span class="btn btn-light">Buka</span></a></div>
         <div class="col-md-6"><a href="{{ route('employee.leave-requests') }}" class="ka-action-tile text-decoration-none"><div><strong>Pengajuan Izin/Cuti</strong><span>{{ $pendingLeaves }} menunggu persetujuan</span></div><span class="btn btn-light">Lihat</span></a></div>
         <div class="col-md-6"><a href="{{ route('employee.attendance-corrections') }}" class="ka-action-tile text-decoration-none"><div><strong>Koreksi Absensi</strong><span>{{ $pendingCorrections }} menunggu persetujuan</span></div><span class="btn btn-light">Lihat</span></a></div>
+        @if($leaveBalance)
+        <div class="col-md-6"><a href="{{ route('employee.leave-requests.create') }}" class="ka-action-tile text-decoration-none"><div><strong>Sisa Cuti Tahunan</strong><span>{{ $leaveBalance->remaining_quota }} hari dari {{ $leaveBalance->total_quota }} hari · Terpakai {{ $leaveBalance->used_quota }}</span></div><span class="btn btn-light">Ajukan</span></a></div>
+        @endif
     </div>
     <div class="card custom-card ka-card">
         <div class="ka-card-header"><h5 class="mb-0">Riwayat minggu ini</h5><a href="{{ route('employee.attendance.history') }}" class="btn btn-sm btn-light">Semua</a></div>

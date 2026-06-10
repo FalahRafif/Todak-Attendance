@@ -50,6 +50,6 @@ class ShiftController extends Controller
 
     private function validated(Request $request): array
     {
-        return $request->validate(['name' => ['required', 'string', 'max:255'], 'start_time' => ['required', 'date_format:H:i'], 'end_time' => ['required', 'date_format:H:i'], 'check_in_start_time' => ['nullable', 'date_format:H:i'], 'check_in_end_time' => ['nullable', 'date_format:H:i'], 'check_out_start_time' => ['nullable', 'date_format:H:i'], 'check_out_end_time' => ['nullable', 'date_format:H:i'], 'late_tolerance_minutes' => ['required', 'integer', 'min:0'], 'is_overnight' => ['nullable', 'boolean'], 'is_active' => ['nullable', 'boolean']]);
+        return $request->validate(['name' => ['required', 'string', 'max:255'], 'start_time' => ['required', 'date_format:H:i'], 'end_time' => ['required', 'date_format:H:i'], 'check_in_start_time' => ['nullable', 'date_format:H:i'], 'check_in_end_time' => ['nullable', 'date_format:H:i'], 'check_out_start_time' => ['nullable', 'date_format:H:i'], 'check_out_end_time' => ['nullable', 'date_format:H:i'], 'late_tolerance_minutes' => ['required', 'integer', 'min:0'], 'is_overnight' => ['nullable', 'boolean'], 'applicable_days' => ['required', 'string', 'in:weekday,weekend,all,custom'], 'custom_days' => ['nullable', 'array'], 'custom_days.*' => ['string', 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday'], 'is_active' => ['nullable', 'boolean']]);
     }
 }

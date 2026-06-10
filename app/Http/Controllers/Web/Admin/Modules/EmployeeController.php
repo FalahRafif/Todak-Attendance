@@ -23,6 +23,11 @@ class EmployeeController extends Controller
         return view('pages.admin.modules.employees.form', $this->employeeService->formData());
     }
 
+    public function show(int $id): View
+    {
+        return view('pages.admin.modules.employees.show', $this->employeeService->detailData($id));
+    }
+
     public function edit(int $id): View
     {
         return view('pages.admin.modules.employees.form', $this->employeeService->formData($id));

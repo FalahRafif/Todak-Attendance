@@ -64,6 +64,11 @@ class LeaveRequest extends Model
         return $this->belongsTo(Reference::class, 'status_id');
     }
 
+    public function attachment(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'attachment_id');
+    }
+
     public function details(): HasMany
     {
         return $this->hasMany(LeaveRequestDetail::class);

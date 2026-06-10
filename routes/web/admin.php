@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Web\Admin\DashboardController;
+use App\Http\Controllers\Web\Admin\Modules\ApplicationParameterController;
 use App\Http\Controllers\Web\Admin\Modules\DepartmentController;
 use App\Http\Controllers\Web\Admin\Modules\EmployeeController;
 use App\Http\Controllers\Web\Admin\Modules\HolidayController;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:Admin'])->group(function (): void {
     Route::redirect('/', '/admin/dashboard')->name('home');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/application-parameters', [ApplicationParameterController::class, 'index'])->name('application-parameters');
+    Route::post('/application-parameters/annual-leave-quota', [ApplicationParameterController::class, 'updateAnnualLeaveQuota'])->name('application-parameters.annual-leave-quota');
 
     Route::get('/departments', [DepartmentController::class, 'index'])->name('departments');
     Route::get('/departments/create', [DepartmentController::class, 'create'])->name('departments.create');
@@ -51,6 +54,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:Admin'])->grou
     Route::get('/employees', [EmployeeController::class, 'index'])->name('employees');
     Route::get('/employees/create', [EmployeeController::class, 'create'])->name('employees.create');
     Route::post('/employees', [EmployeeController::class, 'store'])->name('employees.store');
+    Route::get('/employees/{id}', [EmployeeController::class, 'show'])->name('employees.show');
     Route::get('/employees/{id}/edit', [EmployeeController::class, 'edit'])->name('employees.edit');
     Route::put('/employees/{id}', [EmployeeController::class, 'update'])->name('employees.update');
     Route::delete('/employees/{id}', [EmployeeController::class, 'destroy'])->name('employees.destroy');

@@ -33,7 +33,7 @@
                             <td>{{ $item->employee?->department?->name ?? '-' }}</td>
                             <td>{{ $item->employee?->position?->name ?? '-' }}</td>
                             <td><span class="ka-badge {{ $item->delete_status ? 'ka-badge-muted' : 'ka-badge-success' }}">{{ $item->delete_status ? 'Deleted' : 'Active' }}</span></td>
-                            <td class="text-end"><div class="ka-action-group"><a href="{{ route('admin.employees.edit', $item->id) }}" class="btn btn-sm btn-primary">Edit</a><form method="POST" action="{{ route('admin.employees.destroy', $item->id) }}">@csrf @method('DELETE')<button class="btn btn-sm btn-danger">Delete</button></form></div></td>
+                            <td class="text-end"><div class="ka-action-group"><a href="{{ route('admin.employees.show', $item->id) }}" class="btn btn-sm btn-light">Detail</a><a href="{{ route('admin.employees.edit', $item->id) }}" class="btn btn-sm btn-primary">Edit</a><form method="POST" action="{{ route('admin.employees.destroy', $item->id) }}">@csrf @method('DELETE')<button class="btn btn-sm btn-danger">Delete</button></form></div></td>
                         </tr>
                     @endforeach
                 </tbody>
