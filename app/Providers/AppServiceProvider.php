@@ -20,9 +20,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-	if (str_starts_with(config('app.url'), 'https://')) {
-	        URL::forceScheme('https');
-	}
+        if (str_starts_with(config('app.url'), 'https://')) {
+            URL::forceScheme('https');
+            $this->app['request']->server->set('HTTPS', 'on');
+        }
+
         Model::preventSilentlyDiscardingAttributes($this->app->isLocal());
 
         $this->loadMigrationsFrom(database_path('migrations/0.0.1'));
