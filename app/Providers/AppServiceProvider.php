@@ -4,7 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\ServiceProvider;
-
+use Illuminate\Support\Facades\URL;
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -20,6 +20,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+	if (str_starts_with(config('app.url'), 'https://')) {
+	        URL::forceScheme('https');
+	}
         Model::preventSilentlyDiscardingAttributes($this->app->isLocal());
 
         $this->loadMigrationsFrom(database_path('migrations/0.0.1'));
