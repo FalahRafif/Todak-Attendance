@@ -1,0 +1,53 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: klikabsen-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - .:/var/www/html
+      - storage_data:/var/www/html/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - klikabsen
+
+  mysql:
+    image: mysql:8.0
+    container_name: klikabsen-mysql
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT_EXPOSE:-3307}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+      MYSQL_DATABASE: ${DB_DATABASE:-klikabsen}
+      MYSQL_USER: ${DB_USERNAME:-klikabsen}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-rootsecret}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - klikabsen
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+
+volumes:
+  mysql_data:
+    driver: local
+  storage_data:
+    driver: local
+
+networks:
+  klikabsen:
+    driver: bridge
