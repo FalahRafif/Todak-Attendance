@@ -32,8 +32,7 @@ Route::prefix('hrd')->name('hrd.')->middleware(['auth', 'role:HRD'])->group(func
     Route::get('/attendances/map', AttendanceMapController::class)->name('attendances.map');
     Route::get('/activity-calendar', ActivityCalendarController::class)->name('activity-calendar');
     Route::get('/attendances/{id}', AttendanceShowController::class)->name('attendances.show');
-    Route::post('/attendances/{id}/approve', [AttendanceApprovalController::class, 'approve'])->name('attendances.approve');
-    Route::post('/attendances/{id}/reject', [AttendanceApprovalController::class, 'reject'])->name('attendances.reject');
+    Route::post('/attendances/{id}/review', [AttendanceApprovalController::class, '__invoke'])->name('attendances.review');
     Route::get('/leave-requests', [LeaveRequestController::class, 'index'])->name('leave-requests');
     Route::get('/leave-requests/{id}', [LeaveRequestController::class, 'show'])->name('leave-requests.show');
     Route::post('/leave-requests/{id}/approve', [LeaveRequestController::class, 'approve'])->name('leave-requests.approve');

@@ -6,22 +6,27 @@ use App\Http\Controllers\Controller;
 use App\Services\Hrd\HrdService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AttendanceApprovalController extends Controller
 {
-    public function approve(Request $request, int $id, HrdService $hrdService): RedirectResponse
+    public function __invoke(Request $request, int $id, HrdService $hrdService): RedirectResponse
     {
-        $payload = $request->validate(['approval_note' => ['nullable', 'string']]);
-        $hrdService->approveAttendance($id, $payload['approval_note'] ?? null);
+        $payload = $request->validate([
+            'session' => ['required', Rule::in(['check_in', 'check_out'])],
+            'decision' => ['required', Rule::in(['approved', 'rejected'])],
+            'note' => ['nullable', 'string'],
+        ]);
 
-        return back()->with('success', 'Attendance berhasil di-approve.');
-    }
+        if ($payload['decision'] === 'rejected' && trim((string) $payload['note']) === '') {
+            return back()->withErrors(['note' => 'Alasan wajib diisi saat menolak.'])->withInput();
+        }
 
-    public function reject(Request $request, int $id, HrdService $hrdService): RedirectResponse
-    {
-        $payload = $request->validate(['approval_note' => ['required', 'string']]);
-        $hrdService->rejectAttendance($id, $payload['approval_note']);
+        $hrdService->reviewOutsideRadius($id, $payload['session'], $payload['decision'], $payload['note'] ?? null);
 
-        return back()->with('success', 'Attendance berhasil ditandai rejected/flagged.');
+        $label = $payload['session'] === 'check_in' ? 'absen masuk' : 'absen pulang';
+        $verdict = $payload['decision'] === 'approved' ? 'disetujui' : 'ditandai perlu perhatian';
+
+        return back()->with('success', "Review {$label} berhasil — {$verdict}.");
     }
 }
