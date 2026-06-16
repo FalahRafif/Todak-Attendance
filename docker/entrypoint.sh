@@ -8,7 +8,7 @@ mkdir -p storage/framework/sessions storage/framework/views storage/framework/ca
 
 if [ -f "composer.json" ] && [ ! -d "vendor" ]; then
     echo "Installing composer dependencies..."
-    composer install --no-interaction --prefer-dist --optimize-autoloader
+    composer install --no-interaction --no-scripts --prefer-dist --optimize-autoloader
 fi
 
 if [ ! -f ".env" ]; then

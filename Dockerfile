@@ -1,6 +1,6 @@
 ARG PHP_VERSION=8.3
 
-FROM php:${PHP_VERSION}-fpm-alpine AS app
+FROM php:${PHP_VERSION}-fpm-alpine
 
 RUN apk add --no-cache \
     nginx \
