@@ -45,7 +45,7 @@
                     <div class="ka-form-section-title">Employee Data</div>
                     <p class="text-muted mb-3">Wajib jika role Employee. Shift dan Work Location wajib untuk absensi.</p>
                     <div class="row g-3">
-                        <div class="col-md-4"><label class="form-label">Employee Number</label><input name="employee_number" value="{{ old('employee_number', $employee?->employee_number) }}" class="form-control employee-required" @required($isEmployeeSelected)></div>
+                        <div class="col-md-4"><label class="form-label">NIK</label><input name="employee_number" value="{{ old('employee_number', $employee?->employee_number) }}" class="form-control employee-required" @required($isEmployeeSelected)></div>
                         <div class="col-md-4"><label class="form-label">Full Name</label><input name="full_name" value="{{ old('full_name', $employee?->full_name ?? $user?->name) }}" class="form-control employee-required" @required($isEmployeeSelected)></div>
                         <div class="col-md-4"><label class="form-label">Phone</label><input name="phone" value="{{ old('phone', $employee?->phone) }}" class="form-control"></div>
                         <div class="col-md-4"><label class="form-label">Gender</label><select name="gender" class="form-control"><option value="">-</option><option value="male" @selected(old('gender', $employee?->gender) === 'male')>male</option><option value="female" @selected(old('gender', $employee?->gender) === 'female')>female</option></select></div>

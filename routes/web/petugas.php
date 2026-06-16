@@ -16,11 +16,14 @@ use App\Http\Controllers\Web\Hrd\LeaveBalanceController;
 use App\Http\Controllers\Web\Hrd\LeaveRequestController;
 use App\Http\Controllers\Web\Hrd\Reports\DailyAttendanceReportController;
 use App\Http\Controllers\Web\Hrd\Reports\MonthlyAttendanceReportController;
+use App\Http\Controllers\Web\Profile\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('hrd')->name('hrd.')->middleware(['auth', 'role:HRD'])->group(function (): void {
     Route::redirect('/', '/hrd/dashboard')->name('home');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::get('/attendances', AttendanceIndexController::class)->name('attendances');
     Route::get('/attendances/not-checked-in', NotCheckedInController::class)->name('attendances.not-checked-in');
     Route::get('/attendances/incomplete', IncompleteAttendanceController::class)->name('attendances.incomplete');

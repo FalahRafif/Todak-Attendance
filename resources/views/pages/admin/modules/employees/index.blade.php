@@ -21,7 +21,7 @@
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table ka-table" id="ka-user-table">
-                <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Employee</th><th>Department</th><th>Position</th><th>Status</th><th class="text-end">Action</th></tr></thead>
+                <thead><tr><th>User</th><th>Email</th><th>Role</th><th>NIK</th><th>Department</th><th>Position</th><th>Status</th><th class="text-end">Action</th></tr></thead>
                 <tbody>
                     @foreach($items as $item)
                         <tr>
@@ -29,7 +29,7 @@
                             <td><div class="d-flex align-items-center gap-3">@if($profileImageUrl)<img src="{{ $profileImageUrl }}" class="ka-avatar p-0" style="object-fit:cover" alt="{{ $item->name }}" onerror="this.outerHTML='<span class=&quot;ka-avatar&quot;>{{ strtoupper(substr($item->name ?: $item->username, 0, 1)) }}</span>'">@else<span class="ka-avatar">{{ strtoupper(substr($item->name ?: $item->username, 0, 1)) }}</span>@endif<div><div class="fw-semibold">{{ $item->name }}</div><div class="text-muted small">{{ $item->username }}</div></div></div></td>
                             <td>{{ $item->email }}</td>
                             <td><span class="ka-badge ka-badge-primary">{{ $item->role?->name ?? '-' }}</span></td>
-                            <td><div class="fw-semibold">{{ $item->employee?->employee_number ?? '-' }}</div><div class="text-muted small">{{ $item->employee?->full_name ?? '' }}</div></td>
+                            <td>{{ $item->employee?->employee_number ?? '-' }}</td>
                             <td>{{ $item->employee?->department?->name ?? '-' }}</td>
                             <td>{{ $item->employee?->position?->name ?? '-' }}</td>
                             <td><span class="ka-badge {{ $item->delete_status ? 'ka-badge-muted' : 'ka-badge-success' }}">{{ $item->delete_status ? 'Deleted' : 'Active' }}</span></td>
