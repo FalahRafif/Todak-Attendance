@@ -7,6 +7,8 @@
     .ka-history-date { width: 58px; height: 58px; border-radius: 16px; background: #eff6ff; color: #0f4c81; display: flex; flex-direction: column; justify-content: center; align-items: center; flex: 0 0 auto; }
     .ka-history-date strong { font-size: 1.2rem; line-height: 1; }
     .ka-history-date span { font-size: .72rem; text-transform: uppercase; }
+    .ka-history-date.is-leave { background: #fef2f2; color: #dc2626; }
+    .ka-history-card.is-leave { border-color: #fecaca; }
     @media (max-width: 576px) { .ka-history-card { border-radius: 16px; } }
 </style>
 @endpush
@@ -29,17 +31,22 @@
     </div>
     <div class="d-grid gap-3">
         @forelse($items as $item)
+            @php($isLeave = in_array($item->status?->description, ['leave', 'sick', 'permission'], true))
             @php($lateTolerance = $item->shift?->late_tolerance_minutes ?? 0)
             @php($isLateOutsideTolerance = $item->late_minutes > $lateTolerance)
             @php($workHours = intdiv((int) $item->total_work_minutes, 60))
             @php($workMinutes = (int) $item->total_work_minutes % 60)
-            <a href="{{ route('employee.attendance.history.show', $item->id) }}" class="ka-history-card">
+            <a href="{{ route('employee.attendance.history.show', $item->id) }}" class="ka-history-card {{ $isLeave ? 'is-leave' : '' }}">
                 <div class="d-flex gap-3 align-items-center">
-                    <div class="ka-history-date"><strong>{{ $item->attendance_date?->format('d') }}</strong><span>{{ $item->attendance_date?->format('M') }}</span></div>
+                    <div class="ka-history-date {{ $isLeave ? 'is-leave' : '' }}"><strong>{{ $item->attendance_date?->format('d') }}</strong><span>{{ $item->attendance_date?->format('M') }}</span></div>
                     <div class="flex-grow-1">
                         <div class="fw-bold">{{ friendly_label($item->status?->description) }}</div>
-                        <div class="text-muted small">{{ $item->workLocation?->name ?? '-' }} · {{ $item->check_out_at ? $workHours.'j '.$workMinutes.'m kerja' : 'Belum absen pulang' }}</div>
-                        <div class="mt-2 d-flex gap-2 flex-wrap"><span class="badge bg-primary-transparent text-primary">Masuk {{ $item->check_in_at?->format('H:i') ?? '--:--' }}</span><span class="badge bg-secondary-transparent text-secondary">Pulang {{ $item->check_out_at?->format('H:i') ?? '--:--' }}</span><span class="badge {{ $isLateOutsideTolerance ? 'bg-danger-transparent text-danger' : 'bg-success-transparent text-success' }}">{{ $item->late_minutes > 0 ? 'Telat '.$item->late_minutes.'m'.($isLateOutsideTolerance ? ' > toleransi' : ' toleransi') : 'Tepat waktu' }}</span>@if($item->is_need_approval)<span class="badge bg-warning-transparent text-warning">Perlu Dicek HRD</span>@endif</div>
+                        @if($isLeave)
+                            <div class="text-muted small">{{ $item->workLocation?->name ?? '-' }}</div>
+                        @else
+                            <div class="text-muted small">{{ $item->workLocation?->name ?? '-' }} · {{ $item->check_out_at ? $workHours.'j '.$workMinutes.'m kerja' : 'Belum absen pulang' }}</div>
+                            <div class="mt-2 d-flex gap-2 flex-wrap"><span class="badge bg-primary-transparent text-primary">Masuk {{ $item->check_in_at?->format('H:i') ?? '--:--' }}</span><span class="badge bg-secondary-transparent text-secondary">Pulang {{ $item->check_out_at?->format('H:i') ?? '--:--' }}</span><span class="badge {{ $isLateOutsideTolerance ? 'bg-danger-transparent text-danger' : 'bg-success-transparent text-success' }}">{{ $item->late_minutes > 0 ? 'Telat '.$item->late_minutes.'m'.($isLateOutsideTolerance ? ' > toleransi' : ' toleransi') : 'Tepat waktu' }}</span> @if($item->check_in_is_inside_radius === false && $item->check_in_at)<span class="badge {{ $item->check_in_review_status_id ? 'bg-info-transparent text-info' : 'bg-warning-transparent text-warning' }}">Masuk: {{ $item->check_in_review_status_id ? 'Sudah Direview' : 'Luar Radius' }}</span> @endif @if($item->check_out_is_inside_radius === false && $item->check_out_at)<span class="badge {{ $item->check_out_review_status_id ? 'bg-info-transparent text-info' : 'bg-warning-transparent text-warning' }}">Pulang: {{ $item->check_out_review_status_id ? 'Sudah Direview' : 'Luar Radius' }}</span> @endif</div>
+                        @endif
                     </div>
                     <span class="text-muted">›</span>
                 </div>

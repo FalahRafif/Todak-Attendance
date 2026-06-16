@@ -21,6 +21,7 @@
 @php($insideCheckIn = $item->check_in_is_inside_radius !== false)
 @php($insideCheckOut = $item->check_out_is_inside_radius !== false)
 @php($isLeaveStatus = in_array($item->status?->description, ['leave', 'sick', 'permission'], true))
+@php($reviewLabel = function(?int $statusId) { if ($statusId === null) return 'Menunggu review HRD'; $desc = \App\Models\Reference::find($statusId)?->description; if ($desc === 'approved') return 'Disetujui HRD'; if ($desc === 'rejected') return 'Ditandai perlu perhatian'; return '-'; })
 <div class="ka-detail-shell">
     <div class="ka-toolbar">
         <div>
@@ -59,7 +60,9 @@
                 <div class="col-md-6"><b>Absen Masuk Note</b><div>{{ $item->check_in_note ?? '-' }}</div></div>
                 <div class="col-md-6"><b>Absen Pulang Note</b><div>{{ $item->check_out_note ?? '-' }}</div></div>
                 <div class="col-md-6"><b>Pulang Lebih Awal</b><div>{{ $item->early_leave_minutes }} menit</div></div>
-                <div class="col-md-6"><b>Pengecekan HRD</b><div>{{ $item->is_need_approval ? 'Perlu dicek karena lokasi di luar radius atau ada catatan khusus' : 'Tidak perlu dicek ulang' }}</div></div>
+                <div class="col-12"><hr class="my-2"><b>Review Outside Radius</b></div>
+                <div class="col-md-6"><b>Absen Masuk</b><div>@if($item->check_in_at && !$insideCheckIn)<span class="badge {{ $item->check_in_review_status_id ? 'bg-info' : 'bg-warning text-dark' }}">{{ $reviewLabel($item->check_in_review_status_id) }}</span>@if($item->check_in_review_note)<br><small class="text-muted">{{ $item->check_in_review_note }}</small>@endif @else <span class="text-muted">Dalam radius / tidak perlu review</span> @endif</div></div>
+                <div class="col-md-6"><b>Absen Pulang</b><div>@if($item->check_out_at && !$insideCheckOut)<span class="badge {{ $item->check_out_review_status_id ? 'bg-info' : 'bg-warning text-dark' }}">{{ $reviewLabel($item->check_out_review_status_id) }}</span>@if($item->check_out_review_note)<br><small class="text-muted">{{ $item->check_out_review_note }}</small>@endif @else <span class="text-muted">Dalam radius / tidak perlu review</span> @endif</div></div>
             </div>
         </div>
     </div>

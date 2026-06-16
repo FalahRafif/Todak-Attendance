@@ -183,7 +183,7 @@ class EmployeePortalService
 
     public function attendanceDetailData(int $id): array
     {
-        $item = Attendance::query()->with(['shift', 'workLocation', 'status', 'logs', 'checkInPhoto', 'checkOutPhoto'])->where('employee_id', $this->employee()->id)->findOrFail($id);
+        $item = Attendance::query()->with(['shift', 'workLocation', 'status', 'logs', 'checkInPhoto', 'checkOutPhoto', 'checkInWorkMode', 'checkOutWorkMode'])->where('employee_id', $this->employee()->id)->findOrFail($id);
         $attachmentSecurityService = app(AttachmentSecurityService::class);
 
         return ['title' => 'Detail Absensi', 'item' => $item, 'checkInPhotoUrl' => $attachmentSecurityService->generateTemporaryPreviewUrl($item->checkInPhoto), 'checkOutPhotoUrl' => $attachmentSecurityService->generateTemporaryPreviewUrl($item->checkOutPhoto)];
