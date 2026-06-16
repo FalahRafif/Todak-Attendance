@@ -8,11 +8,14 @@ use App\Http\Controllers\Web\Admin\Modules\HolidayController;
 use App\Http\Controllers\Web\Admin\Modules\PositionController;
 use App\Http\Controllers\Web\Admin\Modules\ShiftController;
 use App\Http\Controllers\Web\Admin\Modules\WorkLocationController;
+use App\Http\Controllers\Web\Profile\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:Admin'])->group(function (): void {
     Route::redirect('/', '/admin/dashboard')->name('home');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::get('/application-parameters', [ApplicationParameterController::class, 'index'])->name('application-parameters');
     Route::post('/application-parameters/annual-leave-quota', [ApplicationParameterController::class, 'updateAnnualLeaveQuota'])->name('application-parameters.annual-leave-quota');
 

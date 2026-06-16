@@ -328,19 +328,19 @@
                 Todak Attendace Workforce System
             </div>
             <h1 class="brand-title">Absensi kerja <span>lebih presisi.</span></h1>
-            <p class="brand-copy">Kelola kehadiran karyawan, jadwal kerja, lokasi kantor, izin, cuti, dan approval HRD dalam satu panel profesional.</p>
+            <p class="brand-copy">Catat kehadiran, kelola jadwal kerja, lokasi kantor, pengajuan izin, cuti, dan persetujuan dalam satu panel yang ringkas dan andal.</p>
             <div class="feature-grid">
                 <div class="feature-card">
                     <div class="feature-value">GPS</div>
                     <div class="feature-label">Validasi lokasi dan radius kantor.</div>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-value">HRD</div>
-                    <div class="feature-label">Approval izin, cuti, dan koreksi.</div>
+                    <div class="feature-value">Pantau</div>
+                    <div class="feature-label">Persetujuan izin, cuti, dan koreksi.</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-value">Live</div>
-                    <div class="feature-label">Monitoring absensi harian.</div>
+                    <div class="feature-label">Ringkasan kehadiran harian.</div>
                 </div>
             </div>
         </div>
@@ -351,7 +351,7 @@
             <img class="login-logo" src="{{ asset('assets/etherno/public/icon_trans_2.png') }}" alt="Todak Attendace">
             <div class="login-kicker">Secure Login</div>
             <h2 class="login-title">Masuk ke Todak Attendace</h2>
-            <p class="login-subtitle">Gunakan akun internal Anda untuk mengakses dashboard Admin atau HRD.</p>
+            <p class="login-subtitle">Gunakan akun Anda untuk mengakses sistem kehadiran.</p>
 
             @if ($errors->any())
                 <div class="alert">
@@ -366,7 +366,7 @@
                 <div class="field-stack">
                     <div class="field">
                         <label for="email">Email</label>
-                        <input class="input" id="email" type="email" name="email" value="{{ old('email') }}" placeholder="admin@company.local" required autofocus>
+                        <input class="input" id="email" type="email" name="email" value="{{ old('email') }}" placeholder="nama@perusahaan.local" required autofocus>
                     </div>
                     <div class="field">
                         <label for="password">Password</label>
@@ -381,7 +381,7 @@
                     </label>
                 </div>
 
-                <button class="submit-btn" type="submit">Masuk Dashboard</button>
+                <button class="submit-btn" type="submit">Masuk</button>
             </form>
 
             <div class="login-note">Gunakan akun internal yang sudah terdaftar.</div>

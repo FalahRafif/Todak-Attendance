@@ -17,7 +17,7 @@
     $profileRoute = $sessionPrefix . '.profile';
     $profileUrl = \Illuminate\Support\Facades\Route::has($profileRoute)
         ? route($profileRoute)
-        : (\Illuminate\Support\Facades\Route::has('admin.profile') ? route('admin.profile') : $dashboardUrl);
+        : (\Illuminate\Support\Facades\Route::has('employee.profile') ? route('employee.profile') : $dashboardUrl);
 
     $logoutUrl = \Illuminate\Support\Facades\Route::has('logout') ? route('logout') : url('/api/logout');
     $displayName = trim((string) ($sessionUser['name'] ?? $authUser?->name ?? 'Internal User'));
