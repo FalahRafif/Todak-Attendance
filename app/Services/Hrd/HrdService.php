@@ -120,28 +120,62 @@ class HrdService
 
     public function attendanceDetailData(int $id): array
     {
-        $item = $this->attendanceBaseQuery()->with(['logs', 'checkInPhoto', 'checkOutPhoto'])->findOrFail($id);
+        $item = $this->attendanceBaseQuery()->with(['logs', 'checkInPhoto', 'checkOutPhoto', 'checkInWorkMode', 'checkOutWorkMode'])->findOrFail($id);
         $attachmentSecurityService = app(\App\Services\AttachmentSecurityService::class);
 
         return ['title' => 'Detail Absensi', 'item' => $item, 'checkInPhotoUrl' => $attachmentSecurityService->generateTemporaryPreviewUrl($item->checkInPhoto), 'checkOutPhotoUrl' => $attachmentSecurityService->generateTemporaryPreviewUrl($item->checkOutPhoto)];
     }
 
-    public function approveAttendance(int $id, ?string $note): void
+    public function reviewOutsideRadius(int $id, string $session, string $decision, ?string $note): void
     {
+        if (! in_array($session, ['check_in', 'check_out'], true)) {
+            throw new RuntimeException('Sesi review tidak valid.');
+        }
+        if (! in_array($decision, ['approved', 'rejected'], true)) {
+            throw new RuntimeException('Keputusan review tidak valid.');
+        }
+
         $attendance = Attendance::query()->with('employee')->findOrFail($id);
-        $approvedStatusId = $this->approvalStatusId('approved');
-        $attendance->update(['is_need_approval' => false, 'outside_radius_review_status_id' => $approvedStatusId, 'outside_radius_reviewed_by' => auth()->id(), 'outside_radius_reviewed_at' => now(), 'outside_radius_review_note' => $note, 'approved_by' => auth()->id(), 'approved_at' => now(), 'approval_note' => $note, 'updated_by' => auth()->id()]);
-        $this->recordApproval('outside_radius_attendance', $attendance->id, $attendance->employee?->user_id, (int) $approvedStatusId, $note);
-        app(ActivityLogService::class)->log('attendance', 'approve_outside_radius', 'HRD approve outside radius attendance', null, ['attendance_id' => $attendance->id, 'status_id' => $approvedStatusId]);
+
+        $isOutside = $session === 'check_in'
+            ? ($attendance->check_in_is_inside_radius === false)
+            : ($attendance->check_out_is_inside_radius === false);
+
+        if (! $isOutside) {
+            throw new RuntimeException('Sesi ini tidak dalam status outside radius.');
+        }
+
+        $statusId = $this->approvalStatusId($decision);
+        $prefix = $session;
+        $updateData = [
+            "{$prefix}_review_status_id" => $statusId,
+            "{$prefix}_reviewed_by" => auth()->id(),
+            "{$prefix}_reviewed_at" => now(),
+            "{$prefix}_review_note" => $note,
+            'updated_by' => auth()->id(),
+        ];
+
+        $oldReviewStatus = $attendance->{"{$prefix}_review_status_id"};
+        $attendance->update($updateData);
+
+        $stillNeedsReview = $this->attendanceStillNeedsReview($attendance->fresh());
+        if (! $stillNeedsReview) {
+            $attendance->update(['is_need_approval' => false]);
+        }
+
+        $this->recordApproval('outside_radius_attendance', $attendance->id, $attendance->employee?->user_id, (int) $statusId, $note);
+        app(ActivityLogService::class)->log('attendance', "{$decision}_outside_radius_{$session}", "HRD {$decision} outside radius ({$session})", null, ['attendance_id' => $attendance->id, 'session' => $session, 'status_id' => $statusId, 'previous_status_id' => $oldReviewStatus]);
     }
 
-    public function rejectAttendance(int $id, string $note): void
+    private function attendanceStillNeedsReview(Attendance $attendance): bool
     {
-        $attendance = Attendance::query()->with('employee')->findOrFail($id);
-        $rejectedStatusId = $this->approvalStatusId('rejected');
-        $attendance->update(['is_need_approval' => false, 'outside_radius_review_status_id' => $rejectedStatusId, 'outside_radius_reviewed_by' => auth()->id(), 'outside_radius_reviewed_at' => now(), 'outside_radius_review_note' => $note, 'approved_by' => auth()->id(), 'approved_at' => now(), 'approval_note' => $note, 'updated_by' => auth()->id()]);
-        $this->recordApproval('outside_radius_attendance', $attendance->id, $attendance->employee?->user_id, (int) $rejectedStatusId, $note);
-        app(ActivityLogService::class)->log('attendance', 'reject_outside_radius', 'HRD reject outside radius attendance', null, ['attendance_id' => $attendance->id, 'status_id' => $rejectedStatusId]);
+        $checkInOutside = $attendance->check_in_at !== null && $attendance->check_in_is_inside_radius === false;
+        $checkOutOutside = $attendance->check_out_at !== null && $attendance->check_out_is_inside_radius === false;
+
+        $checkInPending = $checkInOutside && $attendance->check_in_review_status_id === null;
+        $checkOutPending = $checkOutOutside && $attendance->check_out_review_status_id === null;
+
+        return $checkInPending || $checkOutPending;
     }
 
     public function leaveRequestListData(Request $request): array

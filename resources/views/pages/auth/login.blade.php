@@ -366,7 +366,7 @@
                 <div class="field-stack">
                     <div class="field">
                         <label for="email">Email</label>
-                        <input class="input" id="email" type="email" name="email" value="{{ old('email') }}" placeholder="nama@perusahaan.local" required autofocus>
+                        <input class="input" id="email" type="email" name="email" value="{{ old('email') }}" placeholder="Masukan Password" required autofocus>
                     </div>
                     <div class="field">
                         <label for="password">Password</label>
