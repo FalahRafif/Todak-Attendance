@@ -88,14 +88,12 @@ class UserProfileService
 
     private function profileImageTypeId(): int
     {
-        return \App\Models\Reference::query()
-            ->where('group_id', 'ATTACHMENT_TYPE')
-            ->where('description', 'profile_image')
-            ->value('id')
-            ?? \App\Models\Reference::query()
-                ->where('group_id', 'ATTACHMENT_TYPE')
-                ->where('description', 'image')
-                ->value('id')
-            ?? 0;
+        $id = \App\Models\Reference::query()->where('code', 'TF_IMG')->value('id');
+
+        if ($id === null) {
+            throw new \RuntimeException('Reference TF_IMG belum tersedia.');
+        }
+
+        return $id;
     }
 }
